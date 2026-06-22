@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Platformer Editor — AmiBlitz3 Map Tool</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- LEFT PANEL: Map editor -->
+    <div id="editor-panel">
+      <h2 class="panel-title">Map Editor <span class="dim">20×16 — 320×256 px (Amiga)</span></h2>
+      <div id="map-controls">
+        <button id="btn-clear">Clear All</button>
+        <button id="btn-fill">Fill (Active Tile)</button>
+        <button id="btn-export">Export Map Data</button>
+      </div>
+      <canvas id="map-canvas"></canvas>
+      <div id="tile-info">Active tile: <span id="active-tile-id">0</span> (0,0)</div>
+    </div>
+
+    <!-- RIGHT PANEL: Tile selector -->
+    <div id="tiles-panel">
+      <h2 class="panel-title">Tile Selector <span class="dim">20×20 tiles — 16×16 px each</span></h2>
+      <canvas id="tiles-canvas"></canvas>
+      <p class="hint">Click a tile on the right to select it, then click/drag on the left to place it on the map.</p>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

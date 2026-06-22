@@ -1,0 +1,135 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+  padding: 10px;
+  gap: 10px;
+}
+
+/* ---- PANELS ---- */
+#editor-panel,
+#tiles-panel {
+  display: flex;
+  flex-direction: column;
+  background: #16213e;
+  border-radius: 8px;
+  border: 1px solid #0f3460;
+  padding: 12px;
+}
+
+#editor-panel {
+  flex: 0 0 auto;
+}
+
+#tiles-panel {
+  flex: 1;
+  min-width: 340px;
+  align-items: center;
+  overflow-y: auto;
+}
+
+/* ---- TITLES ---- */
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #e94560;
+  letter-spacing: 0.5px;
+}
+
+.panel-title .dim {
+  font-weight: 400;
+  font-size: 12px;
+  color: #6a7a9a;
+  margin-left: 6px;
+}
+
+/* ---- MAP CONTROLS ---- */
+#map-controls {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+#map-controls button {
+  background: #0f3460;
+  color: #e0e0e0;
+  border: 1px solid #1a508b;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+#map-controls button:hover {
+  background: #1a508b;
+}
+
+#map-controls button:active {
+  background: #e94560;
+  border-color: #e94560;
+}
+
+/* ---- INFO BAR ---- */
+#tile-info {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6a7a9a;
+  text-align: center;
+}
+
+#tile-info span {
+  color: #e94560;
+  font-weight: 600;
+}
+
+/* ---- CANVASES ---- */
+#map-canvas {
+  border: 2px solid #e94560;
+  border-radius: 4px;
+  image-rendering: pixelated;
+  background: #000;
+}
+
+#tiles-canvas {
+  border: 2px solid #0f3460;
+  border-radius: 4px;
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+
+/* ---- HINT ---- */
+.hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #6a7a9a;
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ---- SCROLLBAR ---- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+::-webkit-scrollbar-thumb {
+  background: #0f3460;
+  border-radius: 3px;
+}
