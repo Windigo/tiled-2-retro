@@ -250,6 +250,7 @@ body {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+  margin-bottom: 8px;
 }
 
 .tile-size-label input[type="range"] {

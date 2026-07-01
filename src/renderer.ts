@@ -170,17 +170,15 @@ function recalcDerived(): void {
 }
 
 /**
- * Recalculate tilesheetCols/tilesheetRows and mapCols/mapRows from
- * image dimensions and the current tileSize.
- * mapCols/mapRows are set to the same as tilesheet cols/rows (full-image grid).
+ * Recalculate tilesheetCols/tilesheetRows from image dimensions and the current tileSize.
+ * Does NOT change mapCols/mapRows — those stay fixed.
  */
-function recalcFromImage(): void {
+function recalcTilesheetFromImage(): void {
   CONFIG.tilesheetCols = Math.max(1, Math.floor(CONFIG.imgW / CONFIG.tileSize));
   CONFIG.tilesheetRows = Math.max(1, Math.floor(CONFIG.imgH / CONFIG.tileSize));
-  CONFIG.mapCols = CONFIG.tilesheetCols;
-  CONFIG.mapRows = CONFIG.tilesheetRows;
   recalcDerived();
-  resizeCanvases();
+  tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
+  tilesCanvas.height = CONFIG.sheetH * CONFIG.scale;
 }
 
 function resizeCanvases(): void {
@@ -227,6 +225,7 @@ let currentProjectPath = '';
 let currentProjectName = '— no project —';
 let currentPngFileName = '';
 let convBitplanes = 4;
+let gridTileSize = 16; // separate visual grid tile size, changed only by slider
 
 // ─── Ensure tileFlags array is large enough ───────────────────────────────────
 
@@ -850,12 +849,17 @@ function drawSheetHover(): void {
 }
 
 function drawTilesheetGrid(): void {
-  tilesCtx.strokeStyle = 'rgba(15, 52, 96, 0.7)';
+  const wDivisible = CONFIG.imgW % gridTileSize === 0;
+  const hDivisible = CONFIG.imgH % gridTileSize === 0;
+  const allEven = wDivisible && hDivisible;
+  const gridColor = allEven ? 'rgba(0, 255, 100, 0.7)' : 'rgba(255, 60, 60, 0.7)';
+  const gridStep = gridTileSize * CONFIG.scale;
+  tilesCtx.strokeStyle = gridColor;
   tilesCtx.lineWidth = 1;
   const dispW = CONFIG.sheetW * CONFIG.scale;
   const dispH = CONFIG.sheetH * CONFIG.scale;
-  for (let x = 0; x <= dispW; x += CONFIG.dTile) { tilesCtx.beginPath(); tilesCtx.moveTo(x, 0); tilesCtx.lineTo(x, dispH); tilesCtx.stroke(); }
-  for (let y = 0; y <= dispH; y += CONFIG.dTile) { tilesCtx.beginPath(); tilesCtx.moveTo(0, y); tilesCtx.lineTo(dispW, y); tilesCtx.stroke(); }
+  for (let x = 0; x <= dispW; x += gridStep) { tilesCtx.beginPath(); tilesCtx.moveTo(x, 0); tilesCtx.lineTo(x, dispH); tilesCtx.stroke(); }
+  for (let y = 0; y <= dispH; y += gridStep) { tilesCtx.beginPath(); tilesCtx.moveTo(0, y); tilesCtx.lineTo(dispW, y); tilesCtx.stroke(); }
 }
 
 function drawActiveHighlight(): void {
@@ -1021,47 +1025,13 @@ mapCanvas.addEventListener('mouseleave', () => { mapHover = { col: -1, row: -1 }
 tileSizeSlider.addEventListener('input', () => {
   if (!projectLoaded || !tilesheet) return;
   const newTileSize = parseInt(tileSizeSlider.value);
-  if (newTileSize === CONFIG.tileSize) return;
-  // Store old cols/rows to preserve map data
-  const oldCols = CONFIG.mapCols;
-  const oldRows = CONFIG.mapRows;
-  const oldTilesheetCols = CONFIG.tilesheetCols;
+  if (newTileSize === gridTileSize) return;
 
-  CONFIG.tileSize = newTileSize;
+  gridTileSize = newTileSize;
   tileSizeValue.textContent = String(newTileSize);
 
-  // Recalculate cols/rows from image dimensions
-  recalcFromImage();
-  ensureTileFlagsSize();
-
-  // Resize existing map data: crop or pad with 0
-  const newCols = CONFIG.mapCols;
-  const newRows = CONFIG.mapRows;
-  for (const entry of maps) {
-    entry.mapCols = newCols;
-    entry.mapRows = newRows;
-    const oldMap = entry.map;
-    const newMap = createEmptyGrid(newCols, newRows);
-    const copyCols = Math.min(oldCols, newCols);
-    const copyRows = Math.min(oldRows, newRows);
-    for (let r = 0; r < copyRows; r++) {
-      for (let c = 0; c < copyCols; c++) {
-        newMap[r][c] = oldMap[r]?.[c] ?? 0;
-      }
-    }
-    entry.map = newMap;
-  }
-
-  // Clamp activeTile if out of range
-  const maxTiles = getMaxTiles();
-  if (activeTile >= maxTiles) activeTile = maxTiles - 1;
-
-  resizeCanvases();
-  renderMapTabs();
+  // Only redraw the tilesheet grid overlay — nothing else changes
   drawTilesheet();
-  drawMap();
-  updateActiveDisplay();
-  updateProjectUI();
 });
 
 // ─── IFF building helpers ─────────────────────────────────────────────────────
