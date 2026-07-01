@@ -31,6 +31,7 @@ interface CreateProjectData {
   tileFlags: number[];
   tilesheetCols: number;
   tilesheetRows: number;
+  convBitplanes?: number;
 }
 
 /** Data for saving a project file (no tilesheet data URL — it's on disk). */
@@ -43,6 +44,7 @@ interface SaveProjectFileData {
   tileFlags: number[];
   tilesheetCols: number;
   tilesheetRows: number;
+  convBitplanes?: number;
 }
 
 /** Response from loading a project. */
@@ -59,6 +61,7 @@ interface LoadProjectResult {
     tilesheetCols: number;
     tilesheetRows: number;
     pngFileName: string;
+    convBitplanes?: number;
   };
 }
 

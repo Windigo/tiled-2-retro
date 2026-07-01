@@ -52,6 +52,7 @@ let projectLoaded = false;
 let currentProjectPath = '';
 let currentProjectName = '— no project —';
 let currentPngFileName = '';
+let convBitplanes = 4;
 // ─── Canvas sizes ─────────────────────────────────────────────────────────────
 mapCanvas.width = CONFIG.mapW * CONFIG.scale;
 mapCanvas.height = CONFIG.mapH * CONFIG.scale;
@@ -467,7 +468,8 @@ async function saveProject() {
         projectFolder: currentProjectPath, projectName, pngFileName: currentPngFileName,
         maps: maps.map(m => ({ ...m, map: m.map.map(row => [...row]) })),
         bits: bitsConfig.bits, tileFlags: [...tileFlags],
-        tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows
+        tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows,
+        convBitplanes
     });
     if (success) {
         updateProjectUI();
@@ -549,6 +551,9 @@ async function applyLoadedProject(result) {
     drawMap();
     updateActiveDisplay();
     updateProjectUI();
+    if (data.convBitplanes !== undefined) {
+        convBitplanes = data.convBitplanes;
+    }
     const hasExport = await editorApi.checkAmigaExport(projectFolder);
     setPreviewEnabled(hasExport);
     showToast('Project loaded: ' + projectName, 'success');
@@ -1402,10 +1407,10 @@ const convPaletteSwatches = document.getElementById('conv-palette-swatches');
 const btnConvertIff = document.getElementById('btn-convert-iff');
 let convLoadedImg = null;
 convBpSlider.addEventListener('input', () => {
-    const bp = parseInt(convBpSlider.value);
-    const colors = 1 << bp;
-    convBpLabel.textContent = String(bp);
-    convColorsLabel.textContent = `${colors} color${colors !== 1 ? 's' : ''}`;
+    convBitplanes = parseInt(convBpSlider.value);
+    const colors = 1 << convBitplanes;
+    convBpLabel.textContent = String(convBitplanes);
+    convColorsLabel.textContent = `${colors} color${convBitplanes !== 1 ? 's' : ''}`;
     if (convLoadedImg)
         reconvert();
 });

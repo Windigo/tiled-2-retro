@@ -88,6 +88,7 @@ declare const editorApi: {
     tileFlags: number[];
     tilesheetCols: number;
     tilesheetRows: number;
+    convBitplanes?: number;
   }) => Promise<boolean>;
   exportAmiga: (data: {
     projectFolder: string;
@@ -193,6 +194,7 @@ let projectLoaded = false;
 let currentProjectPath = '';
 let currentProjectName = '— no project —';
 let currentPngFileName = '';
+let convBitplanes = 4;
 
 // ─── Canvas sizes ─────────────────────────────────────────────────────────────
 
@@ -590,7 +592,8 @@ async function saveProject(): Promise<void> {
     projectFolder: currentProjectPath, projectName, pngFileName: currentPngFileName,
     maps: maps.map(m => ({ ...m, map: m.map.map(row => [...row]) })),
     bits: bitsConfig.bits, tileFlags: [...tileFlags],
-    tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows
+    tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows,
+    convBitplanes
   });
   if (success) { updateProjectUI(); showToast('Project saved', 'success'); }
   else showToast('Failed to save project', 'error');
@@ -650,6 +653,9 @@ async function applyLoadedProject(result: { projectFolder: string; projectName: 
   drawMap();
   updateActiveDisplay();
   updateProjectUI();
+  if (data.convBitplanes !== undefined) {
+    convBitplanes = data.convBitplanes;
+  }
   const hasExport = await editorApi.checkAmigaExport(projectFolder);
   setPreviewEnabled(hasExport);
   showToast('Project loaded: ' + projectName, 'success');
@@ -1429,10 +1435,10 @@ const btnConvertIff = document.getElementById('btn-convert-iff') as HTMLButtonEl
 let convLoadedImg: HTMLImageElement | null = null;
 
 convBpSlider.addEventListener('input', () => {
-  const bp = parseInt(convBpSlider.value);
-  const colors = 1 << bp;
-  convBpLabel.textContent = String(bp);
-  convColorsLabel.textContent = `${colors} color${colors !== 1 ? 's' : ''}`;
+  convBitplanes = parseInt(convBpSlider.value);
+  const colors = 1 << convBitplanes;
+  convBpLabel.textContent = String(convBitplanes);
+  convColorsLabel.textContent = `${colors} color${convBitplanes !== 1 ? 's' : ''}`;
   if (convLoadedImg) reconvert();
 });
 
