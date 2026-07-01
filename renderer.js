@@ -1,31 +1,51 @@
 "use strict";
 // ─── Constants ────────────────────────────────────────────────────────────────
-const TILE_SIZE = 16;
 const SCALE = 2;
-const DTILE = TILE_SIZE * SCALE;
-const TILESHEET_COLS = 20;
-const TILESHEET_ROWS = 20;
-const MAP_COLS = 20;
-const MAP_ROWS = 16;
-const MAP_W = MAP_COLS * TILE_SIZE;
-const MAP_H = MAP_ROWS * TILE_SIZE;
-const SHEET_W = TILESHEET_COLS * TILE_SIZE;
-const SHEET_H = TILESHEET_ROWS * TILE_SIZE;
-const MAX_TILES = TILESHEET_COLS * TILESHEET_ROWS;
 const TOTAL_BITS = 16;
 const CONFIG = {
-    tileSize: TILE_SIZE,
+    tileSize: 16,
     scale: SCALE,
-    dTile: DTILE,
-    tilesheetCols: TILESHEET_COLS,
-    tilesheetRows: TILESHEET_ROWS,
-    mapCols: MAP_COLS,
-    mapRows: MAP_ROWS,
-    mapW: MAP_W,
-    mapH: MAP_H,
-    sheetW: SHEET_W,
-    sheetH: SHEET_H,
+    dTile: 16 * SCALE,
+    tilesheetCols: 20,
+    tilesheetRows: 20,
+    mapCols: 20,
+    mapRows: 16,
+    mapW: 20 * 16,
+    mapH: 16 * 16,
+    sheetW: 20 * 16,
+    sheetH: 20 * 16,
+    imgW: 320,
+    imgH: 256,
 };
+function getMaxTiles() {
+    return CONFIG.tilesheetCols * CONFIG.tilesheetRows;
+}
+function recalcDerived() {
+    CONFIG.dTile = CONFIG.tileSize * CONFIG.scale;
+    CONFIG.mapW = CONFIG.mapCols * CONFIG.tileSize;
+    CONFIG.mapH = CONFIG.mapRows * CONFIG.tileSize;
+    CONFIG.sheetW = CONFIG.tilesheetCols * CONFIG.tileSize;
+    CONFIG.sheetH = CONFIG.tilesheetRows * CONFIG.tileSize;
+}
+/**
+ * Recalculate tilesheetCols/tilesheetRows and mapCols/mapRows from
+ * image dimensions and the current tileSize.
+ * mapCols/mapRows are set to the same as tilesheet cols/rows (full-image grid).
+ */
+function recalcFromImage() {
+    CONFIG.tilesheetCols = Math.max(1, Math.floor(CONFIG.imgW / CONFIG.tileSize));
+    CONFIG.tilesheetRows = Math.max(1, Math.floor(CONFIG.imgH / CONFIG.tileSize));
+    CONFIG.mapCols = CONFIG.tilesheetCols;
+    CONFIG.mapRows = CONFIG.tilesheetRows;
+    recalcDerived();
+    resizeCanvases();
+}
+function resizeCanvases() {
+    mapCanvas.width = CONFIG.mapW * CONFIG.scale;
+    mapCanvas.height = CONFIG.mapH * CONFIG.scale;
+    tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
+    tilesCanvas.height = CONFIG.sheetH * CONFIG.scale;
+}
 // ─── DOM elements ─────────────────────────────────────────────────────────────
 const mapCanvas = document.getElementById('map-canvas');
 const mapCtx = mapCanvas.getContext('2d');
@@ -34,6 +54,8 @@ const tilesCtx = tilesCanvas.getContext('2d');
 const activeTileSpan = document.getElementById('active-tile-id');
 const flagsColumn = document.getElementById('flags-column');
 const bitsOnMapCheckbox = document.getElementById('chk-bits-on-map');
+const tileSizeSlider = document.getElementById('tile-size-slider');
+const tileSizeValue = document.getElementById('tile-size-value');
 // ─── State ────────────────────────────────────────────────────────────────────
 let maps = [];
 let currentMapIndex = 0;
@@ -44,7 +66,7 @@ let mouseDown = false;
 let lastPlaced = null;
 let sheetHover = { col: -1, row: -1 };
 let mapHover = { col: -1, row: -1 };
-const tileFlags = new Array(MAX_TILES).fill(0);
+let tileFlags = new Array(400).fill(0);
 let activeBitIndex = 0;
 let bitsConfig = { bits: [], tileFlags: [] };
 let tilesheet = null;
@@ -53,11 +75,12 @@ let currentProjectPath = '';
 let currentProjectName = '— no project —';
 let currentPngFileName = '';
 let convBitplanes = 4;
-// ─── Canvas sizes ─────────────────────────────────────────────────────────────
-mapCanvas.width = CONFIG.mapW * CONFIG.scale;
-mapCanvas.height = CONFIG.mapH * CONFIG.scale;
-tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
-tilesCanvas.height = CONFIG.sheetH * CONFIG.scale;
+// ─── Ensure tileFlags array is large enough ───────────────────────────────────
+function ensureTileFlagsSize() {
+    const maxTiles = getMaxTiles();
+    while (tileFlags.length < maxTiles)
+        tileFlags.push(0);
+}
 // ─── Bit helpers ──────────────────────────────────────────────────────────────
 function hasBit(tileIdx, bitIdx) {
     return (tileFlags[tileIdx] & (1 << bitIdx)) !== 0;
@@ -261,8 +284,7 @@ function switchToMap(index) {
     const entry = getCurrentMapEntry();
     CONFIG.mapCols = entry.mapCols;
     CONFIG.mapRows = entry.mapRows;
-    CONFIG.mapW = entry.mapCols * CONFIG.tileSize;
-    CONFIG.mapH = entry.mapRows * CONFIG.tileSize;
+    recalcDerived();
     mapCanvas.width = CONFIG.mapW * CONFIG.scale;
     mapCanvas.height = CONFIG.mapH * CONFIG.scale;
     renderMapTabs();
@@ -365,17 +387,17 @@ function updateProjectUI() {
     nameEl.textContent = currentProjectName;
     const mapDims = document.getElementById('map-dims');
     mapDims.textContent = projectLoaded
-        ? `${CONFIG.mapCols}×${CONFIG.mapRows} — ${CONFIG.mapCols * CONFIG.tileSize}×${CONFIG.mapRows * CONFIG.tileSize} px`
+        ? `${CONFIG.mapCols}×${CONFIG.mapRows} — ${CONFIG.mapW}×${CONFIG.mapH} px — tile ${CONFIG.tileSize}px`
         : '—';
     const sheetDims = document.getElementById('tilesheet-dims');
     sheetDims.textContent = projectLoaded
-        ? `${CONFIG.tilesheetCols}×${CONFIG.tilesheetRows} tiles — ${CONFIG.tileSize}×${CONFIG.tileSize} px each`
+        ? `${CONFIG.tilesheetCols}×${CONFIG.tilesheetRows} tiles — ${CONFIG.tileSize}×${CONFIG.tileSize} px each — image ${CONFIG.imgW}×${CONFIG.imgH}px`
         : '—';
 }
 function loadTilesheetFromDataUrl(dataUrl) {
     return new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = () => { tilesheet = img; projectLoaded = true; resolve(); };
+        img.onload = () => { resolve(img); };
         img.onerror = () => { reject(new Error('Failed to load tilesheet image')); };
         img.src = dataUrl;
     });
@@ -387,9 +409,8 @@ function clearEditor() {
     maps = [];
     currentMapIndex = 0;
     activeBitIndex = 0;
-    bitsConfig = { bits: [], tileFlags: new Array(MAX_TILES).fill(0) };
-    for (let i = 0; i < MAX_TILES; i++)
-        tileFlags[i] = 0;
+    bitsConfig = { bits: [], tileFlags: [] };
+    tileFlags = new Array(400).fill(0);
     flagsColumn.innerHTML = '';
     sheetHover = { col: -1, row: -1 };
     mapHover = { col: -1, row: -1 };
@@ -397,16 +418,18 @@ function clearEditor() {
     renderMapTabs();
     updateActiveDisplay();
     updateProjectUI();
+    tileSizeSlider.value = '16';
+    tileSizeValue.textContent = '16';
 }
-async function createNewProject(projectName, folderPath, pngDataUrl, pngFileName, sheetCols, sheetRows, mapCols, mapRows, firstMapName, iffData, bitplanes) {
+async function createNewProject(projectName, folderPath, pngDataUrl, pngFileName, sheetCols, sheetRows, mapCols, mapRows, firstMapName, tileSize, imgW, imgH, iffData, bitplanes) {
+    CONFIG.tileSize = tileSize;
     CONFIG.mapCols = mapCols;
     CONFIG.mapRows = mapRows;
     CONFIG.tilesheetCols = sheetCols;
     CONFIG.tilesheetRows = sheetRows;
-    CONFIG.mapW = mapCols * CONFIG.tileSize;
-    CONFIG.mapH = mapRows * CONFIG.tileSize;
-    CONFIG.sheetW = sheetCols * CONFIG.tileSize;
-    CONFIG.sheetH = sheetRows * CONFIG.tileSize;
+    CONFIG.imgW = imgW;
+    CONFIG.imgH = imgH;
+    recalcDerived();
     mapCanvas.width = CONFIG.mapW * CONFIG.scale;
     mapCanvas.height = CONFIG.mapH * CONFIG.scale;
     tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
@@ -414,8 +437,8 @@ async function createNewProject(projectName, folderPath, pngDataUrl, pngFileName
     const initialMap = { name: firstMapName, map: createEmptyGrid(mapCols, mapRows), mapCols, mapRows };
     maps = [initialMap];
     currentMapIndex = 0;
-    for (let i = 0; i < MAX_TILES; i++)
-        tileFlags[i] = 0;
+    const maxTiles = getMaxTiles();
+    tileFlags = new Array(maxTiles).fill(0);
     bitsConfig = {
         bits: [
             { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' },
@@ -423,13 +446,14 @@ async function createNewProject(projectName, folderPath, pngDataUrl, pngFileName
             { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' },
             { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' },
         ],
-        tileFlags: new Array(MAX_TILES).fill(0)
+        tileFlags: new Array(maxTiles).fill(0)
     };
     ensureBits();
     const resultPath = await editorApi.createProject({ projectName, folderPath, pngDataUrl, pngFileName,
         maps: maps.map(m => ({ ...m, map: m.map.map(row => [...row]) })),
         bits: bitsConfig.bits, tileFlags: [...tileFlags],
         tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows,
+        tileSize: CONFIG.tileSize,
         iffData, convBitplanes: bitplanes
     });
     if (!resultPath) {
@@ -437,7 +461,8 @@ async function createNewProject(projectName, folderPath, pngDataUrl, pngFileName
         return false;
     }
     try {
-        await loadTilesheetFromDataUrl(pngDataUrl);
+        tilesheet = await loadTilesheetFromDataUrl(pngDataUrl);
+        projectLoaded = true;
     }
     catch (err) {
         console.error(err);
@@ -450,6 +475,8 @@ async function createNewProject(projectName, folderPath, pngDataUrl, pngFileName
     if (parentFolder)
         localStorage.setItem('lastProjectFolder', parentFolder);
     activeBitIndex = 0;
+    tileSizeSlider.value = String(CONFIG.tileSize);
+    tileSizeValue.textContent = String(CONFIG.tileSize);
     renderMapTabs();
     renderFlagsUI();
     drawTilesheet();
@@ -470,6 +497,7 @@ async function saveProject() {
         maps: maps.map(m => ({ ...m, map: m.map.map(row => [...row]) })),
         bits: bitsConfig.bits, tileFlags: [...tileFlags],
         tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows,
+        tileSize: CONFIG.tileSize,
         convBitplanes
     });
     if (success) {
@@ -490,12 +518,32 @@ async function loadProject() {
 }
 async function applyLoadedProject(result) {
     const { projectFolder, projectName, data } = result;
+    const tileSize = data.tileSize || 16;
+    CONFIG.tileSize = tileSize;
     CONFIG.tilesheetCols = data.tilesheetCols;
     CONFIG.tilesheetRows = data.tilesheetRows;
-    CONFIG.sheetW = data.tilesheetCols * CONFIG.tileSize;
-    CONFIG.sheetH = data.tilesheetRows * CONFIG.tileSize;
+    recalcDerived();
     tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
     tilesCanvas.height = CONFIG.sheetH * CONFIG.scale;
+    // Get image dimensions from the loaded tilesheet
+    const pngPath = projectFolder + '/' + data.pngFileName;
+    const pngDataUrl = await editorApi.loadPngFile(pngPath);
+    if (!pngDataUrl) {
+        console.error('Failed to load tilesheet from project folder');
+        return;
+    }
+    let img;
+    try {
+        img = await loadTilesheetFromDataUrl(pngDataUrl);
+    }
+    catch (err) {
+        console.error('Failed to decode tilesheet:', err);
+        return;
+    }
+    tilesheet = img;
+    projectLoaded = true;
+    CONFIG.imgW = img.width;
+    CONFIG.imgH = img.height;
     if (data.maps && Array.isArray(data.maps) && data.maps.length > 0) {
         maps = data.maps.map((m) => ({ name: m.name || 'Level', map: m.map.map((row) => [...row]), mapCols: m.mapCols, mapRows: m.mapRows }));
     }
@@ -518,27 +566,15 @@ async function applyLoadedProject(result) {
     const entry = getCurrentMapEntry();
     CONFIG.mapCols = entry.mapCols;
     CONFIG.mapRows = entry.mapRows;
-    CONFIG.mapW = entry.mapCols * CONFIG.tileSize;
-    CONFIG.mapH = entry.mapRows * CONFIG.tileSize;
+    recalcDerived();
     mapCanvas.width = CONFIG.mapW * CONFIG.scale;
     mapCanvas.height = CONFIG.mapH * CONFIG.scale;
     bitsConfig = { bits: data.bits, tileFlags: data.tileFlags };
     ensureBits();
-    for (let i = 0; i < Math.min(data.tileFlags.length, MAX_TILES); i++)
+    const maxTiles = getMaxTiles();
+    tileFlags = new Array(maxTiles).fill(0);
+    for (let i = 0; i < Math.min(data.tileFlags.length, maxTiles); i++)
         tileFlags[i] = data.tileFlags[i];
-    const pngPath = projectFolder + '/' + data.pngFileName;
-    const pngDataUrl = await editorApi.loadPngFile(pngPath);
-    if (!pngDataUrl) {
-        console.error('Failed to load tilesheet from project folder');
-        return;
-    }
-    try {
-        await loadTilesheetFromDataUrl(pngDataUrl);
-    }
-    catch (err) {
-        console.error('Failed to decode tilesheet:', err);
-        return;
-    }
     currentProjectPath = projectFolder;
     currentProjectName = projectName;
     currentPngFileName = data.pngFileName || 'tilesheet.png';
@@ -546,15 +582,16 @@ async function applyLoadedProject(result) {
     if (parentFolder)
         localStorage.setItem('lastProjectFolder', parentFolder);
     activeBitIndex = 0;
+    if (data.convBitplanes !== undefined)
+        convBitplanes = data.convBitplanes;
+    tileSizeSlider.value = String(CONFIG.tileSize);
+    tileSizeValue.textContent = String(CONFIG.tileSize);
     renderMapTabs();
     renderFlagsUI();
     drawTilesheet();
     drawMap();
     updateActiveDisplay();
     updateProjectUI();
-    if (data.convBitplanes !== undefined) {
-        convBitplanes = data.convBitplanes;
-    }
     const hasExport = await editorApi.checkAmigaExport(projectFolder);
     setPreviewEnabled(hasExport);
     showToast('Project loaded: ' + projectName, 'success');
@@ -676,8 +713,9 @@ function drawFlagDots() {
     const dotR = Math.max(1.5, CONFIG.dTile * 0.08);
     const pad = dotR + 1;
     const perRow = 4;
+    const maxTiles = getMaxTiles();
     tilesCtx.save();
-    for (let idx = 0; idx < MAX_TILES; idx++) {
+    for (let idx = 0; idx < maxTiles; idx++) {
         const mask = tileFlags[idx];
         if (mask === 0)
             continue;
@@ -885,6 +923,50 @@ mapCanvas.addEventListener('mousemove', (e) => {
 });
 mapCanvas.addEventListener('mouseleave', () => { mapHover = { col: -1, row: -1 }; drawMap(); });
 [mapCanvas, tilesCanvas].forEach(c => c.addEventListener('contextmenu', (e) => e.preventDefault()));
+// ─── TILE SIZE SLIDER ─────────────────────────────────────────────────────────
+tileSizeSlider.addEventListener('input', () => {
+    if (!projectLoaded || !tilesheet)
+        return;
+    const newTileSize = parseInt(tileSizeSlider.value);
+    if (newTileSize === CONFIG.tileSize)
+        return;
+    // Store old cols/rows to preserve map data
+    const oldCols = CONFIG.mapCols;
+    const oldRows = CONFIG.mapRows;
+    const oldTilesheetCols = CONFIG.tilesheetCols;
+    CONFIG.tileSize = newTileSize;
+    tileSizeValue.textContent = String(newTileSize);
+    // Recalculate cols/rows from image dimensions
+    recalcFromImage();
+    ensureTileFlagsSize();
+    // Resize existing map data: crop or pad with 0
+    const newCols = CONFIG.mapCols;
+    const newRows = CONFIG.mapRows;
+    for (const entry of maps) {
+        entry.mapCols = newCols;
+        entry.mapRows = newRows;
+        const oldMap = entry.map;
+        const newMap = createEmptyGrid(newCols, newRows);
+        const copyCols = Math.min(oldCols, newCols);
+        const copyRows = Math.min(oldRows, newRows);
+        for (let r = 0; r < copyRows; r++) {
+            for (let c = 0; c < copyCols; c++) {
+                newMap[r][c] = oldMap[r]?.[c] ?? 0;
+            }
+        }
+        entry.map = newMap;
+    }
+    // Clamp activeTile if out of range
+    const maxTiles = getMaxTiles();
+    if (activeTile >= maxTiles)
+        activeTile = maxTiles - 1;
+    resizeCanvases();
+    renderMapTabs();
+    drawTilesheet();
+    drawMap();
+    updateActiveDisplay();
+    updateProjectUI();
+});
 // ─── IFF building helpers ─────────────────────────────────────────────────────
 function putU16BE(buf, offset, value) {
     buf[offset] = (value >> 8) & 0xFF;
@@ -900,7 +982,7 @@ function buildMapBinary() {
     const curMap = getCurrentMap();
     if (!curMap)
         return new Uint8Array(0);
-    const numTiles = MAX_TILES;
+    const numTiles = getMaxTiles();
     const headerSize = 12;
     const gridSize = CONFIG.mapCols * CONFIG.mapRows * 2;
     const flagsSize = numTiles * 2;
@@ -922,7 +1004,7 @@ function buildMapBinary() {
         }
     }
     for (let i = 0; i < numTiles; i++) {
-        putU16BE(buf, off, tileFlags[i]);
+        putU16BE(buf, off, tileFlags[i] ?? 0);
         off += 2;
     }
     return buf;
@@ -1001,7 +1083,7 @@ function buildAmiBlitz3Loader() {
     const sheetW = CONFIG.sheetW;
     const sheetH = CONFIG.sheetH;
     const tileSize = CONFIG.tileSize;
-    const maxTiles = MAX_TILES;
+    const maxTiles = getMaxTiles();
     const tilesheetCols = CONFIG.tilesheetCols;
     const bitComments = bitsConfig.bits.map((b, i) => `;   Bit ${i}: ${b.name || '(unused)'}`).join('\n');
     const curMap = getCurrentMap();
@@ -1156,6 +1238,8 @@ let pickedFolderPath = null;
 let modalIffBytes = null;
 let modalBp = 4;
 let projectModalMode = 'create';
+let pickedImgWidth = 320;
+let pickedImgHeight = 256;
 const modalBpSlider = document.getElementById('modal-bitplanes');
 const modalBpLabel = document.getElementById('modal-bp-label');
 const modalColorsLabel = document.getElementById('modal-colors-label');
@@ -1180,7 +1264,6 @@ function updateModalIffPreview() {
         const { palette, indexMap } = result;
         const w = img.width;
         const h = img.height;
-        // Build full-resolution quantized image on a temp canvas
         const tmp = document.createElement('canvas');
         tmp.width = w;
         tmp.height = h;
@@ -1196,7 +1279,6 @@ function updateModalIffPreview() {
             imageData.data[pxOff + 3] = 255;
         }
         tctx.putImageData(imageData, 0, 0);
-        // Scale to fit 200px
         const maxDim = 200;
         const scale = Math.min(maxDim / w, maxDim / h, 1);
         const dw = Math.round(w * scale);
@@ -1208,7 +1290,6 @@ function updateModalIffPreview() {
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(tmp, 0, 0, w, h, 0, 0, dw, dh);
         modalIffPreviewCanvas.style.display = 'block';
-        // Also draw original PNG for comparison
         modalPngPreviewCanvas.width = dw;
         modalPngPreviewCanvas.height = dh;
         const pngCtx = modalPngPreviewCanvas.getContext('2d');
@@ -1234,6 +1315,21 @@ document.getElementById('btn-pick-png').addEventListener('click', async () => {
     pickedPngDataUrl = result.dataUrl;
     pickedPngFileName = result.fileName;
     document.getElementById('png-file-name').textContent = result.fileName;
+    // Get image dimensions
+    const img = new Image();
+    img.onload = () => {
+        pickedImgWidth = img.width;
+        pickedImgHeight = img.height;
+        // Auto-calculate tile defaults based on image
+        const defaultTileSize = 16;
+        const sheetCols = Math.max(1, Math.floor(img.width / defaultTileSize));
+        const sheetRows = Math.max(1, Math.floor(img.height / defaultTileSize));
+        document.getElementById('input-sheet-cols').value = String(sheetCols);
+        document.getElementById('input-sheet-rows').value = String(sheetRows);
+        document.getElementById('input-map-cols').value = String(sheetCols);
+        document.getElementById('input-map-rows').value = String(sheetRows);
+    };
+    img.src = result.dataUrl;
     modalIffPreviewRow.style.display = 'block';
     updateModalIffPreview();
 });
@@ -1269,10 +1365,11 @@ document.getElementById('btn-modal-create').addEventListener('click', async () =
     const sheetRows = parseInt(document.getElementById('input-sheet-rows').value) || 20;
     const mapCols = parseInt(document.getElementById('input-map-cols').value) || 20;
     const mapRows = parseInt(document.getElementById('input-map-rows').value) || 16;
-    for (let i = 0; i < MAX_TILES; i++)
-        tileFlags[i] = 0;
+    const tileSize = 16; // default for new projects, user can change via slider
+    const maxTiles = sheetCols * sheetRows;
+    tileFlags = new Array(maxTiles).fill(0);
     document.getElementById('new-project-overlay').classList.add('hidden');
-    await createNewProject(projectName, pickedFolderPath, pickedPngDataUrl, pickedPngFileName, sheetCols, sheetRows, mapCols, mapRows, firstMapName, modalIffBytes ? Array.from(modalIffBytes) : undefined, modalBp);
+    await createNewProject(projectName, pickedFolderPath, pickedPngDataUrl, pickedPngFileName, sheetCols, sheetRows, mapCols, mapRows, firstMapName, tileSize, pickedImgWidth, pickedImgHeight, modalIffBytes ? Array.from(modalIffBytes) : undefined, modalBp);
 });
 // ─── Rename project ────────────────────────────────────────────────────────
 const projectNameSpan = document.getElementById('project-name');
@@ -1416,6 +1513,8 @@ function handleMenuAction(action) {
             modalBpSlider.value = '4';
             modalBpLabel.textContent = '4';
             modalColorsLabel.textContent = '16 colors';
+            pickedImgWidth = 320;
+            pickedImgHeight = 256;
             modalIffPreviewRow.style.display = 'none';
             document.getElementById('png-file-name').textContent = 'no file selected';
             document.getElementById('folder-path').textContent = 'no folder selected';
@@ -1482,6 +1581,8 @@ function showProjectSettings() {
         pickedPngFileName = currentPngFileName;
         document.getElementById('png-file-name').textContent = currentPngFileName;
         document.getElementById('folder-path').textContent = currentProjectPath;
+        pickedImgWidth = CONFIG.imgW;
+        pickedImgHeight = CONFIG.imgH;
         modalIffPreviewRow.style.display = 'block';
         updateModalIffPreview();
     }
@@ -1497,16 +1598,14 @@ document.getElementById('btn-modal-save-settings').addEventListener('click', asy
     CONFIG.tilesheetRows = newSheetRows;
     CONFIG.mapCols = newMapCols;
     CONFIG.mapRows = newMapRows;
-    CONFIG.sheetW = newSheetCols * CONFIG.tileSize;
-    CONFIG.sheetH = newSheetRows * CONFIG.tileSize;
-    CONFIG.mapW = newMapCols * CONFIG.tileSize;
-    CONFIG.mapH = newMapRows * CONFIG.tileSize;
+    recalcDerived();
     convBitplanes = modalBp;
     currentProjectName = newName;
     mapCanvas.width = CONFIG.mapW * CONFIG.scale;
     mapCanvas.height = CONFIG.mapH * CONFIG.scale;
     tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
     tilesCanvas.height = CONFIG.sheetH * CONFIG.scale;
+    ensureTileFlagsSize();
     drawTilesheet();
     drawMap();
     updateProjectUI();

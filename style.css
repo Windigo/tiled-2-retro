@@ -219,6 +219,7 @@ body {
   display: flex;
   gap: 6px;
   margin-bottom: 8px;
+  align-items: center;
 }
 
 #map-controls button {
@@ -240,6 +241,28 @@ body {
 #map-controls button:active {
   background: #e94560;
   border-color: #e94560;
+}
+
+.tile-size-label {
+  font-size: 12px;
+  color: #a0b0c0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tile-size-label input[type="range"] {
+  width: 80px;
+  accent-color: #e94560;
+  cursor: pointer;
+}
+
+.tile-size-label #tile-size-value {
+  color: #e94560;
+  font-weight: 600;
+  min-width: 18px;
+  display: inline-block;
 }
 
 /* ---- INFO BAR ---- */

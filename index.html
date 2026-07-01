@@ -45,6 +45,10 @@
       <div id="editor-panel">
         <h2 class="panel-title">Map Editor <span class="dim" id="map-dims">—</span></h2>
         <div id="map-controls">
+          <label class="tile-size-label">Tile:
+            <input type="range" id="tile-size-slider" min="8" max="64" value="16" step="1">
+            <span id="tile-size-value">16</span>px
+          </label>
         </div>
         <canvas id="map-canvas"></canvas>
         <div id="tile-info">Active tile: <span id="active-tile-id">0</span> (0,0)</div>

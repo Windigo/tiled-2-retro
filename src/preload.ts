@@ -31,6 +31,7 @@ interface CreateProjectData {
   tileFlags: number[];
   tilesheetCols: number;
   tilesheetRows: number;
+  tileSize: number;
   iffData?: number[];
   convBitplanes?: number;
 }
@@ -45,6 +46,7 @@ interface SaveProjectFileData {
   tileFlags: number[];
   tilesheetCols: number;
   tilesheetRows: number;
+  tileSize: number;
   convBitplanes?: number;
 }
 
@@ -61,6 +63,7 @@ interface LoadProjectResult {
     mapRows?: number;
     tilesheetCols: number;
     tilesheetRows: number;
+    tileSize: number;
     pngFileName: string;
     convBitplanes?: number;
   };
