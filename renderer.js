@@ -1377,10 +1377,14 @@ async function showLoadProjectBrowser() {
     document.getElementById('file-browser-overlay').classList.remove('hidden');
     await fbNavigate(saved);
 }
-// ─── PNG → IFF CONVERTER ───────────────────────────────────────────────────
+// ─── PNG → IFF CONVERTER (multi-bitplane with color quantization) ─────────
 let convPngDataUrl = null;
 let convPngFileName = '';
 let convIffBytes = null;
+let convPalette = null; // RGB triplets
+let convIndexMap = null; // per-pixel palette index
+let convImgWidth = 0;
+let convImgHeight = 0;
 const btnPickPngConv = document.getElementById('btn-pick-png-conv');
 const pngFileNameConv = document.getElementById('png-file-name-conv');
 const convPngCanvas = document.getElementById('conv-png-canvas');
@@ -1389,7 +1393,22 @@ const convPreviewRow = document.getElementById('conv-png-preview-row');
 const convFileInfo = document.getElementById('conv-file-info');
 const convPngDim = document.getElementById('conv-png-dim');
 const convIffSize = document.getElementById('conv-iff-size');
+const convIffColors = document.getElementById('conv-iff-colors');
+const convBpSlider = document.getElementById('conv-bitplanes');
+const convBpLabel = document.getElementById('conv-bp-label');
+const convColorsLabel = document.getElementById('conv-colors-label');
+const convPaletteDiv = document.getElementById('conv-palette');
+const convPaletteSwatches = document.getElementById('conv-palette-swatches');
 const btnConvertIff = document.getElementById('btn-convert-iff');
+let convLoadedImg = null;
+convBpSlider.addEventListener('input', () => {
+    const bp = parseInt(convBpSlider.value);
+    const colors = 1 << bp;
+    convBpLabel.textContent = String(bp);
+    convColorsLabel.textContent = `${colors} color${colors !== 1 ? 's' : ''}`;
+    if (convLoadedImg)
+        reconvert();
+});
 btnPickPngConv.addEventListener('click', async () => {
     const result = await editorApi.pickPng();
     if (!result)
@@ -1397,97 +1416,242 @@ btnPickPngConv.addEventListener('click', async () => {
     convPngDataUrl = result.dataUrl;
     convPngFileName = result.fileName;
     pngFileNameConv.textContent = result.fileName;
-    // Load and display PNG preview
     const img = new Image();
     img.onload = () => {
+        convLoadedImg = img;
         convPngCanvas.width = img.width;
         convPngCanvas.height = img.height;
         const ctx = convPngCanvas.getContext('2d');
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, 0, 0);
         convPngDim.textContent = `${img.width}×${img.height} px`;
-        // Convert to IFF
-        convIffBytes = pngToIff(img);
-        // Draw IFF preview
-        const w = img.width;
-        const h = img.height;
-        convIffCanvas.width = w;
-        convIffCanvas.height = h;
-        const iffCtx = convIffCanvas.getContext('2d');
-        iffCtx.imageSmoothingEnabled = false;
-        const imageData = iffCtx.createImageData(w, h);
-        const bytesPerRow = ((w + 15) >> 4) << 1;
-        // Skip to BODY chunk: FORM(12) + BMHD(8+20=28) + CMAP(8+6=14) = 54 bytes, then BODY header (8) = 62
-        let bodyOffset = 12; // skip FORM header
-        // Read FORM size
-        const formSize = (convIffBytes[4] << 24) | (convIffBytes[5] << 16) | (convIffBytes[6] << 8) | convIffBytes[7];
-        // Skip "ILBM" (4 bytes after FORM header)
-        let pos = 12; // after "ILBM"
-        while (pos < convIffBytes.length) {
-            const chunkType = String.fromCharCode(convIffBytes[pos], convIffBytes[pos + 1], convIffBytes[pos + 2], convIffBytes[pos + 3]);
-            const chunkLen = (convIffBytes[pos + 4] << 24) | (convIffBytes[pos + 5] << 16) | (convIffBytes[pos + 6] << 8) | convIffBytes[pos + 7];
-            if (chunkType === 'BODY') {
-                bodyOffset = pos + 8;
-                break;
-            }
-            pos += 8 + chunkLen;
-            if (chunkLen % 2 !== 0)
-                pos += 1; // IFF padding
-        }
-        for (let y = 0; y < h; y++) {
-            const rowOff = bodyOffset + y * bytesPerRow;
-            for (let x = 0; x < w; x++) {
-                const byteIdx = rowOff + (x >> 3);
-                const bitIdx = 7 - (x & 7);
-                const isWhite = (convIffBytes[byteIdx] & (1 << bitIdx)) !== 0;
-                const pxOff = (y * w + x) * 4;
-                imageData.data[pxOff] = isWhite ? 255 : 0;
-                imageData.data[pxOff + 1] = isWhite ? 255 : 0;
-                imageData.data[pxOff + 2] = isWhite ? 255 : 0;
-                imageData.data[pxOff + 3] = 255;
-            }
-        }
-        iffCtx.putImageData(imageData, 0, 0);
-        convIffSize.textContent = formatSize(convIffBytes.length);
+        convImgWidth = img.width;
+        convImgHeight = img.height;
+        reconvert();
         convPreviewRow.style.display = 'flex';
         convFileInfo.style.display = 'flex';
         btnConvertIff.disabled = false;
     };
     img.src = result.dataUrl;
 });
-/**
- * Convert an HTMLImageElement to a 1-bitplane IFF/ILBM Uint8Array.
- * Uses the same algorithm as the Python converter.
- */
-function pngToIff(img) {
+function reconvert() {
+    if (!convLoadedImg)
+        return;
+    const bp = parseInt(convBpSlider.value);
+    const result = pngToIffMulti(convLoadedImg, bp);
+    convIffBytes = result.iff;
+    convPalette = result.palette;
+    convIndexMap = result.indexMap;
+    // Draw IFF preview using palette
+    drawIffPreview(convPalette, convIndexMap);
+    // Draw palette swatches
+    drawPaletteSwatches(convPalette, bp);
+    // Update info
+    convIffSize.textContent = formatSize(convIffBytes.length);
+    convIffColors.textContent = `${1 << bp} colors`;
+    convPaletteDiv.style.display = 'block';
+}
+function drawIffPreview(palette, indexMap) {
+    const w = convImgWidth;
+    const h = convImgHeight;
+    convIffCanvas.width = w;
+    convIffCanvas.height = h;
+    const iffCtx = convIffCanvas.getContext('2d');
+    iffCtx.imageSmoothingEnabled = false;
+    const imageData = iffCtx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const idx = indexMap[y * w + x];
+            const colOff = idx * 3;
+            const pxOff = (y * w + x) * 4;
+            imageData.data[pxOff] = palette[colOff];
+            imageData.data[pxOff + 1] = palette[colOff + 1];
+            imageData.data[pxOff + 2] = palette[colOff + 2];
+            imageData.data[pxOff + 3] = 255;
+        }
+    }
+    iffCtx.putImageData(imageData, 0, 0);
+}
+function drawPaletteSwatches(palette, nPlanes) {
+    const numColors = 1 << nPlanes;
+    let html = '';
+    for (let i = 0; i < numColors; i++) {
+        const off = i * 3;
+        const r = palette[off];
+        const g = palette[off + 1];
+        const b = palette[off + 2];
+        html += `<span class="conv-swatch" style="background:rgb(${r},${g},${b})" title="#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}"></span>`;
+    }
+    convPaletteSwatches.innerHTML = html;
+}
+function medianCutQuantize(rgb, maxColors) {
+    const numPixels = rgb.length / 4;
+    if (numPixels === 0 || maxColors === 0) {
+        return { palette: new Uint8Array(0), indexMap: new Uint8Array(0) };
+    }
+    // Build initial pixel list
+    const allPixels = [];
+    let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
+    for (let i = 0; i < numPixels; i++) {
+        const off = i * 4;
+        const r = rgb[off], g = rgb[off + 1], b = rgb[off + 2];
+        if (r < rMin)
+            rMin = r;
+        if (r > rMax)
+            rMax = r;
+        if (g < gMin)
+            gMin = g;
+        if (g > gMax)
+            gMax = g;
+        if (b < bMin)
+            bMin = b;
+        if (b > bMax)
+            bMax = b;
+        allPixels.push(i);
+    }
+    let bins = [{ pixels: allPixels, rMin, rMax, gMin, gMax, bMin, bMax }];
+    // Split bins until we reach maxColors
+    while (bins.length < maxColors) {
+        // Find bin with widest range
+        let bestIdx = 0;
+        let bestRange = 0;
+        for (let i = 0; i < bins.length; i++) {
+            const b = bins[i];
+            if (b.pixels.length <= 1)
+                continue;
+            const rRange = b.rMax - b.rMin;
+            const gRange = b.gMax - b.gMin;
+            const bRange = b.bMax - b.bMin;
+            const maxRange = Math.max(rRange, gRange, bRange);
+            if (maxRange > bestRange) {
+                bestRange = maxRange;
+                bestIdx = i;
+            }
+        }
+        if (bestRange === 0)
+            break; // all bins are single-color
+        const bin = bins[bestIdx];
+        // Choose channel to split on
+        const rRange = bin.rMax - bin.rMin;
+        const gRange = bin.gMax - bin.gMin;
+        const bRange = bin.bMax - bin.bMin;
+        let channel;
+        if (rRange >= gRange && rRange >= bRange)
+            channel = 'r';
+        else if (gRange >= bRange)
+            channel = 'g';
+        else
+            channel = 'b';
+        // Sort pixels by chosen channel
+        const getVal = (pi) => {
+            const off = pi * 4;
+            if (channel === 'r')
+                return rgb[off];
+            if (channel === 'g')
+                return rgb[off + 1];
+            return rgb[off + 2];
+        };
+        bin.pixels.sort((a, b) => getVal(a) - getVal(b));
+        // Split at median
+        const mid = Math.floor(bin.pixels.length / 2);
+        const leftPixels = bin.pixels.slice(0, mid);
+        const rightPixels = bin.pixels.slice(mid);
+        function computeBounds(pxs) {
+            let rMn = 255, rMx = 0, gMn = 255, gMx = 0, bMn = 255, bMx = 0;
+            for (const pi of pxs) {
+                const off = pi * 4;
+                const r = rgb[off], g = rgb[off + 1], b = rgb[off + 2];
+                if (r < rMn)
+                    rMn = r;
+                if (r > rMx)
+                    rMx = r;
+                if (g < gMn)
+                    gMn = g;
+                if (g > gMx)
+                    gMx = g;
+                if (b < bMn)
+                    bMn = b;
+                if (b > bMx)
+                    bMx = b;
+            }
+            return { rMin: rMn, rMax: rMx, gMin: gMn, gMax: gMx, bMin: bMn, bMax: bMx };
+        }
+        const leftBounds = computeBounds(leftPixels);
+        const rightBounds = computeBounds(rightPixels);
+        bins.splice(bestIdx, 1, { pixels: leftPixels, ...leftBounds }, { pixels: rightPixels, ...rightBounds });
+    }
+    // Build palette: average color of each bin
+    const palette = new Uint8Array(bins.length * 3);
+    for (let i = 0; i < bins.length; i++) {
+        let rSum = 0, gSum = 0, bSum = 0;
+        for (const pi of bins[i].pixels) {
+            const off = pi * 4;
+            rSum += rgb[off];
+            gSum += rgb[off + 1];
+            bSum += rgb[off + 2];
+        }
+        const n = bins[i].pixels.length || 1;
+        palette[i * 3] = Math.round(rSum / n);
+        palette[i * 3 + 1] = Math.round(gSum / n);
+        palette[i * 3 + 2] = Math.round(bSum / n);
+    }
+    // Build index map: assign each pixel to nearest palette color
+    const indexMap = new Uint8Array(numPixels);
+    for (let i = 0; i < numPixels; i++) {
+        const off = i * 4;
+        const r = rgb[off], g = rgb[off + 1], b = rgb[off + 2];
+        let bestDist = Infinity;
+        let bestIdx = 0;
+        for (let c = 0; c < bins.length; c++) {
+            const pr = palette[c * 3], pg = palette[c * 3 + 1], pb = palette[c * 3 + 2];
+            const dr = r - pr, dg = g - pg, db = b - pb;
+            const dist = dr * dr + dg * dg + db * db;
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestIdx = c;
+            }
+        }
+        indexMap[i] = bestIdx;
+    }
+    return { palette, indexMap };
+}
+// ─── Multi-bitplane IFF encoder ───────────────────────────────────────────
+function pngToIffMulti(img, nPlanes) {
     const w = img.width;
     const h = img.height;
     const bytesPerRow = ((w + 15) >> 4) << 1;
-    // Render to temp canvas to read pixels
+    const maxColors = 1 << nPlanes;
+    // Read RGBA pixels
     const tmp = document.createElement('canvas');
     tmp.width = w;
     tmp.height = h;
     const ctx = tmp.getContext('2d');
     ctx.drawImage(img, 0, 0);
     const imageData = ctx.getImageData(0, 0, w, h);
-    const pixels = imageData.data;
-    // Build BODY
-    const body = new Uint8Array(h * bytesPerRow);
+    const rgb = imageData.data; // RGBA
+    // Quantize
+    const quant = medianCutQuantize(rgb, maxColors);
+    const palette = quant.palette;
+    const indexMap = quant.indexMap;
+    // Build interleaved BODY: for each row, for each plane, pack bits
+    const body = new Uint8Array(h * nPlanes * bytesPerRow);
     for (let y = 0; y < h; y++) {
-        const rowOff = y * bytesPerRow;
-        for (let x = 0; x < w; x++) {
-            const pxOff = (y * w + x) * 4;
-            const r = pixels[pxOff];
-            const g = pixels[pxOff + 1];
-            const b = pixels[pxOff + 2];
-            // Any non-black pixel → set in monochrome
-            if (r > 127 || g > 127 || b > 127) {
-                const byteIdx = x >> 3;
-                const bitIdx = 7 - (x & 7);
-                body[rowOff + byteIdx] |= (1 << bitIdx);
+        for (let plane = 0; plane < nPlanes; plane++) {
+            const planeRowOff = (y * nPlanes + plane) * bytesPerRow;
+            for (let x = 0; x < w; x++) {
+                const idx = indexMap[y * w + x];
+                if (idx & (1 << plane)) {
+                    const byteIdx = x >> 3;
+                    const bitIdx = 7 - (x & 7);
+                    body[planeRowOff + byteIdx] |= (1 << bitIdx);
+                }
             }
         }
     }
+    // Build CMAP: 2^nPlanes entries, 3 bytes each (RGB). Pad with black if needed.
+    const cmapLen = maxColors * 3;
+    const cmap = new Uint8Array(cmapLen);
+    cmap.set(palette); // may be shorter if fewer colors; rest stays 0 (black)
     function iffChunk(type, data) {
         const out = new Uint8Array(8 + data.length);
         for (let i = 0; i < 4; i++)
@@ -1499,29 +1663,34 @@ function pngToIff(img) {
     const bmhd = new Uint8Array(20);
     putU16BE(bmhd, 0, w);
     putU16BE(bmhd, 2, h);
-    bmhd[8] = 1; // nPlanes
+    putU16BE(bmhd, 4, 0); // x origin
+    putU16BE(bmhd, 6, 0); // y origin
+    bmhd[8] = nPlanes;
+    bmhd[9] = 0; // masking = none
+    bmhd[10] = 0; // compression = none
+    bmhd[11] = 0; // pad
+    putU16BE(bmhd, 12, 0); // transparent color
     bmhd[14] = 44;
-    bmhd[15] = 52; // aspect
-    putU16BE(bmhd, 16, w);
-    putU16BE(bmhd, 18, h);
-    const cmap = new Uint8Array([0, 0, 0, 255, 255, 255]);
+    bmhd[15] = 52; // aspect (PAL default)
+    putU16BE(bmhd, 16, w); // page width
+    putU16BE(bmhd, 18, h); // page height
     const bmhdChunk = iffChunk('BMHD', bmhd);
     const cmapChunk = iffChunk('CMAP', cmap);
     const bodyChunk = iffChunk('BODY', body);
     const ilbmInner = new Uint8Array(4 + bmhdChunk.length + cmapChunk.length + bodyChunk.length);
     let p = 0;
     ilbmInner.set([0x49, 0x4C, 0x42, 0x4D], p);
-    p += 4;
+    p += 4; // "ILBM"
     ilbmInner.set(bmhdChunk, p);
     p += bmhdChunk.length;
     ilbmInner.set(cmapChunk, p);
     p += cmapChunk.length;
     ilbmInner.set(bodyChunk, p);
     const form = new Uint8Array(8 + ilbmInner.length);
-    form.set([0x46, 0x4F, 0x52, 0x4D], 0);
+    form.set([0x46, 0x4F, 0x52, 0x4D], 0); // "FORM"
     putU32BE(form, 4, ilbmInner.length);
     form.set(ilbmInner, 8);
-    return form;
+    return { iff: form, palette, indexMap };
 }
 btnConvertIff.addEventListener('click', async () => {
     if (!convIffBytes)

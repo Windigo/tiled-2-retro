@@ -227,13 +227,20 @@
           </div>
         </div>
 
+        <div class="form-row">
+          <div class="form-group">
+            <label>Bitplanes: <strong id="conv-bp-label">4</strong> (<span id="conv-colors-label">16 colors</span>)</label>
+            <input type="range" id="conv-bitplanes" min="1" max="8" value="4" step="1">
+          </div>
+        </div>
+
         <div class="converter-preview-row" id="conv-png-preview-row" style="display:none;">
           <div class="form-group">
             <label>PNG Preview</label>
             <canvas id="conv-png-canvas" class="conv-preview-canvas"></canvas>
           </div>
           <div class="form-group">
-            <label>IFF Preview (monochrome)</label>
+            <label>IFF Preview (quantized)</label>
             <canvas id="conv-iff-canvas" class="conv-preview-canvas"></canvas>
           </div>
         </div>
@@ -241,6 +248,12 @@
         <div id="conv-file-info" class="conv-file-info" style="display:none;">
           <span id="conv-png-dim"></span>
           <span id="conv-iff-size"></span>
+          <span id="conv-iff-colors"></span>
+        </div>
+
+        <div id="conv-palette" class="conv-palette" style="display:none;">
+          <label>Palette (CMAP)</label>
+          <div id="conv-palette-swatches" class="conv-palette-swatches"></div>
         </div>
 
         <div class="modal-footer">
