@@ -8,10 +8,6 @@ const api = {
     tilesheetRows: 20,
     mapCols: 20,
     mapRows: 16,
-    /** Listen for native menu actions. */
-    onMenuAction: (callback) => {
-        electron_1.ipcRenderer.on('menu-action', (_event, action) => callback(action));
-    },
     /** Open a file dialog to pick a PNG tilesheet. Returns { dataUrl, fileName } or null. */
     pickPng: () => electron_1.ipcRenderer.invoke('pick-png'),
     /** Open a folder dialog to pick where to create the project. Returns path or null. */

@@ -59,7 +59,6 @@ declare const editorApi: {
   readonly tilesheetRows: number;
   readonly mapCols: number;
   readonly mapRows: number;
-  onMenuAction: (callback: (action: string) => void) => void;
   loadBitsConfig: () => Promise<BitsConfig>;
   saveFullConfig: (bits: BitDef[], tileFlags: number[]) => Promise<boolean>;
   loadMapJson: () => Promise<ExportData | null>;
@@ -1345,12 +1344,18 @@ function switchTab(tabName: string): void {
 tabLevelEditor.addEventListener('click', () => switchTab('level-editor'));
 tabPngIff.addEventListener('click', () => switchTab('png-iff'));
 
-// ─── NATIVE MENU ACTION HANDLER ────────────────────────────────────────────
+// ─── CUSTOM MENU BAR (HTML dropdowns inside the window) ───────────────────
 
-editorApi.onMenuAction((action: string) => {
+document.querySelectorAll('#menu-bar .menu-item').forEach(el => {
+  el.addEventListener('click', () => {
+    const action = (el as HTMLElement).dataset.action;
+    handleMenuAction(action!);
+  });
+});
+
+function handleMenuAction(action: string): void {
   switch (action) {
     case 'new':
-      // Show new project modal on level editor tab
       switchTab('level-editor');
       pickedPngDataUrl = null; pickedPngFileName = ''; pickedFolderPath = null;
       document.getElementById('png-file-name')!.textContent = 'no file selected';
@@ -1386,7 +1391,7 @@ editorApi.onMenuAction((action: string) => {
       switchTab('png-iff');
       break;
   }
-});
+}
 
 async function showLoadProjectBrowser(): Promise<void> {
   const saved = localStorage.getItem('lastProjectFolder') || (await editorApi.pickFolder());

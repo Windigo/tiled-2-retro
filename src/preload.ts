@@ -70,11 +70,6 @@ const api = {
   mapCols: 20,
   mapRows: 16,
 
-  /** Listen for native menu actions. */
-  onMenuAction: (callback: (action: string) => void): void => {
-    ipcRenderer.on('menu-action', (_event, action: string) => callback(action));
-  },
-
   /** Open a file dialog to pick a PNG tilesheet. Returns { dataUrl, fileName } or null. */
   pickPng: (): Promise<{ dataUrl: string; fileName: string } | null> =>
     ipcRenderer.invoke('pick-png'),

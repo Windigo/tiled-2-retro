@@ -1320,11 +1320,16 @@ function switchTab(tabName) {
 }
 tabLevelEditor.addEventListener('click', () => switchTab('level-editor'));
 tabPngIff.addEventListener('click', () => switchTab('png-iff'));
-// ─── NATIVE MENU ACTION HANDLER ────────────────────────────────────────────
-editorApi.onMenuAction((action) => {
+// ─── CUSTOM MENU BAR (HTML dropdowns inside the window) ───────────────────
+document.querySelectorAll('#menu-bar .menu-item').forEach(el => {
+    el.addEventListener('click', () => {
+        const action = el.dataset.action;
+        handleMenuAction(action);
+    });
+});
+function handleMenuAction(action) {
     switch (action) {
         case 'new':
-            // Show new project modal on level editor tab
             switchTab('level-editor');
             pickedPngDataUrl = null;
             pickedPngFileName = '';
@@ -1364,7 +1369,7 @@ editorApi.onMenuAction((action) => {
             switchTab('png-iff');
             break;
     }
-});
+}
 async function showLoadProjectBrowser() {
     const saved = localStorage.getItem('lastProjectFolder') || (await editorApi.pickFolder());
     if (!saved)

@@ -36,7 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
-let mainWindow = null;
 function createWindow() {
     const win = new electron_1.BrowserWindow({
         width: 1100,
@@ -50,72 +49,10 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         }
     });
-    mainWindow = win;
     win.loadFile('index.html');
     win.setMenuBarVisibility(false);
+    win.setMenu(null); // Remove default Electron menu entirely
     // win.webContents.openDevTools();
-    buildMenu(win);
-}
-function buildMenu(win) {
-    const sendAction = (action) => {
-        win.webContents.send('menu-action', action);
-    };
-    const template = [
-        {
-            label: 'File',
-            submenu: [
-                {
-                    label: 'New Project',
-                    accelerator: 'CmdOrCtrl+N',
-                    click: () => sendAction('new')
-                },
-                {
-                    label: 'Load Project',
-                    accelerator: 'CmdOrCtrl+O',
-                    click: () => sendAction('load')
-                },
-                {
-                    label: 'Save Project',
-                    accelerator: 'CmdOrCtrl+S',
-                    click: () => sendAction('save')
-                },
-                { type: 'separator' },
-                {
-                    label: 'Export Amiga',
-                    accelerator: 'CmdOrCtrl+E',
-                    click: () => sendAction('export')
-                },
-                {
-                    label: 'Preview Export',
-                    accelerator: 'CmdOrCtrl+Shift+E',
-                    click: () => sendAction('preview')
-                },
-                { type: 'separator' },
-                { role: 'quit' }
-            ]
-        },
-        {
-            label: 'View',
-            submenu: [
-                {
-                    label: 'Level Editor',
-                    click: () => sendAction('tab-level-editor')
-                },
-                {
-                    label: 'PNG → IFF Converter',
-                    click: () => sendAction('tab-png-iff')
-                },
-                { type: 'separator' },
-                {
-                    label: 'Toggle DevTools',
-                    accelerator: 'F12',
-                    click: () => win.webContents.toggleDevTools()
-                }
-            ]
-        }
-    ];
-    const menu = electron_1.Menu.buildFromTemplate(template);
-    electron_1.Menu.setApplicationMenu(menu);
 }
 // ─── IPC: File dialogs for project workflow ──────────────────────────────────
 /** Pick a PNG tilesheet file; returns { dataUrl, fileName } or null. */

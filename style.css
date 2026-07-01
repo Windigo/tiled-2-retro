@@ -12,6 +12,82 @@ body {
   height: 100vh;
 }
 
+/* ---- CUSTOM MENU BAR (inside window) ---- */
+#menu-bar {
+  display: flex;
+  align-items: center;
+  background: #0d1117;
+  border-bottom: 1px solid #1a508b;
+  flex-shrink: 0;
+  min-height: 28px;
+  padding: 0;
+}
+
+.menu-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.menu-title {
+  background: transparent;
+  color: #a0b0c0;
+  border: none;
+  padding: 5px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: color 0.15s, background 0.15s;
+}
+
+.menu-title:hover {
+  color: #fff;
+  background: #1a508b;
+}
+
+.menu-dropdown-content {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #16213e;
+  border: 1px solid #1a508b;
+  border-radius: 0 0 6px 6px;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 1001;
+  padding: 4px 0;
+}
+
+.menu-dropdown:hover .menu-dropdown-content {
+  display: block;
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: #c9d1d9;
+  border: none;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+
+.menu-item:hover {
+  background: #e94560;
+  color: #fff;
+}
+
+.menu-separator {
+  border: none;
+  border-top: 1px solid #0f3460;
+  margin: 4px 0;
+}
+
 /* ---- TOP BAR (TAB SWITCHER) ---- */
 #top-bar {
   display: flex;
@@ -85,7 +161,7 @@ body {
 /* ---- TAB CONTENT ---- */
 .tab-content {
   display: none;
-  height: calc(100vh - 40px);
+  height: calc(100vh - 40px - 28px);
 }
 
 .tab-content.active {

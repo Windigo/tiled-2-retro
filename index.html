@@ -7,7 +7,29 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- TOP BAR: Tab switcher (buttons are now in native Electron menu) -->
+  <!-- CUSTOM MENU BAR (inside the window) -->
+  <div id="menu-bar">
+    <div class="menu-dropdown">
+      <button class="menu-title">File</button>
+      <div class="menu-dropdown-content">
+        <button class="menu-item" data-action="new">New Project</button>
+        <button class="menu-item" data-action="load">Load Project</button>
+        <button class="menu-item" data-action="save">Save Project</button>
+        <hr class="menu-separator">
+        <button class="menu-item" data-action="export">Export Amiga</button>
+        <button class="menu-item" data-action="preview">Preview Export</button>
+      </div>
+    </div>
+    <div class="menu-dropdown">
+      <button class="menu-title">View</button>
+      <div class="menu-dropdown-content">
+        <button class="menu-item" data-action="tab-level-editor">Level Editor</button>
+        <button class="menu-item" data-action="tab-png-iff">PNG → IFF Converter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP BAR: Tab switcher -->
   <div id="top-bar">
     <button id="tab-level-editor" class="tab-btn active">Level Editor</button>
     <button id="tab-png-iff" class="tab-btn">PNG → IFF Converter</button>

@@ -1,8 +1,6 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-
-let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -18,76 +16,10 @@ function createWindow(): void {
     }
   });
 
-  mainWindow = win;
   win.loadFile('index.html');
   win.setMenuBarVisibility(false);
+  win.setMenu(null); // Remove default Electron menu entirely
   // win.webContents.openDevTools();
-
-  buildMenu(win);
-}
-
-function buildMenu(win: BrowserWindow): void {
-  const sendAction = (action: string) => {
-    win.webContents.send('menu-action', action);
-  };
-
-  const template: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: 'File',
-      submenu: [
-        {
-          label: 'New Project',
-          accelerator: 'CmdOrCtrl+N',
-          click: () => sendAction('new')
-        },
-        {
-          label: 'Load Project',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => sendAction('load')
-        },
-        {
-          label: 'Save Project',
-          accelerator: 'CmdOrCtrl+S',
-          click: () => sendAction('save')
-        },
-        { type: 'separator' },
-        {
-          label: 'Export Amiga',
-          accelerator: 'CmdOrCtrl+E',
-          click: () => sendAction('export')
-        },
-        {
-          label: 'Preview Export',
-          accelerator: 'CmdOrCtrl+Shift+E',
-          click: () => sendAction('preview')
-        },
-        { type: 'separator' },
-        { role: 'quit' }
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [
-        {
-          label: 'Level Editor',
-          click: () => sendAction('tab-level-editor')
-        },
-        {
-          label: 'PNG → IFF Converter',
-          click: () => sendAction('tab-png-iff')
-        },
-        { type: 'separator' },
-        {
-          label: 'Toggle DevTools',
-          accelerator: 'F12',
-          click: () => win.webContents.toggleDevTools()
-        }
-      ]
-    }
-  ];
-
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
 }
 
 // ─── IPC: File dialogs for project workflow ──────────────────────────────────
