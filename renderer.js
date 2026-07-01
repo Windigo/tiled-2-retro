@@ -74,6 +74,13 @@ let currentProjectName = '— no project —';
 let currentPngFileName = '';
 let convBitplanes = 4;
 let gridTileSize = 16; // separate visual grid tile size, changed only by slider
+function gridDTile() { return gridTileSize * CONFIG.scale; }
+function gridMapCols() { return Math.max(1, Math.floor(mapCanvas.width / gridDTile())); }
+function gridMapRows() { return Math.max(1, Math.floor(mapCanvas.height / gridDTile())); }
+function mapCellFromPoint(p) {
+    const d = gridDTile();
+    return { col: Math.floor(p.x / d), row: Math.floor(p.y / d) };
+}
 // ─── Ensure tileFlags array is large enough ───────────────────────────────────
 function ensureTileFlagsSize() {
     const maxTiles = getMaxTiles();
@@ -606,17 +613,21 @@ function tileDisplayXY(tileIdx) {
     return { sx: base.sx * CONFIG.scale, sy: base.sy * CONFIG.scale };
 }
 function drawMap() {
-    mapCtx.clearRect(0, 0, CONFIG.mapW * CONFIG.scale, CONFIG.mapH * CONFIG.scale);
+    const d = gridDTile();
+    mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
     if (!projectLoaded || !tilesheet)
         return;
     const curMap = getCurrentMap();
     if (!curMap)
         return;
-    for (let r = 0; r < CONFIG.mapRows; r++) {
-        for (let c = 0; c < CONFIG.mapCols; c++) {
+    const cols = gridMapCols();
+    const rows = gridMapRows();
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
             const tileIdx = curMap[r]?.[c] ?? 0;
-            const { sx, sy } = tileSourceXY(tileIdx);
-            mapCtx.drawImage(tilesheet, sx, sy, CONFIG.tileSize, CONFIG.tileSize, c * CONFIG.dTile, r * CONFIG.dTile, CONFIG.dTile, CONFIG.dTile);
+            const sx = (tileIdx % CONFIG.tilesheetCols) * gridTileSize;
+            const sy = Math.floor(tileIdx / CONFIG.tilesheetCols) * gridTileSize;
+            mapCtx.drawImage(tilesheet, sx, sy, gridTileSize, gridTileSize, c * d, r * d, d, d);
         }
     }
     drawMapGrid();
@@ -629,51 +640,55 @@ function drawMapGhost() {
         return;
     if (!tilesheet)
         return;
-    const { sx, sy } = tileSourceXY(activeTile);
+    const d = gridDTile();
+    const sx = (activeTile % CONFIG.tilesheetCols) * gridTileSize;
+    const sy = Math.floor(activeTile / CONFIG.tilesheetCols) * gridTileSize;
     mapCtx.globalAlpha = 0.5;
-    mapCtx.drawImage(tilesheet, sx, sy, CONFIG.tileSize, CONFIG.tileSize, mapHover.col * CONFIG.dTile, mapHover.row * CONFIG.dTile, CONFIG.dTile, CONFIG.dTile);
+    mapCtx.drawImage(tilesheet, sx, sy, gridTileSize, gridTileSize, mapHover.col * d, mapHover.row * d, d, d);
     mapCtx.globalAlpha = 1.0;
     mapCtx.strokeStyle = '#ffd700';
     mapCtx.lineWidth = 2;
-    mapCtx.strokeRect(mapHover.col * CONFIG.dTile + 0.5, mapHover.row * CONFIG.dTile + 0.5, CONFIG.dTile - 1, CONFIG.dTile - 1);
+    mapCtx.strokeRect(mapHover.col * d + 0.5, mapHover.row * d + 0.5, d - 1, d - 1);
 }
 function drawMapGrid() {
     mapCtx.strokeStyle = 'rgba(233, 69, 96, 0.35)';
     mapCtx.lineWidth = 1;
-    const dispW = CONFIG.mapW * CONFIG.scale;
-    const dispH = CONFIG.mapH * CONFIG.scale;
-    for (let x = 0; x <= dispW; x += CONFIG.dTile) {
+    const d = gridDTile();
+    for (let x = 0; x <= mapCanvas.width; x += d) {
         mapCtx.beginPath();
         mapCtx.moveTo(x, 0);
-        mapCtx.lineTo(x, dispH);
+        mapCtx.lineTo(x, mapCanvas.height);
         mapCtx.stroke();
     }
-    for (let y = 0; y <= dispH; y += CONFIG.dTile) {
+    for (let y = 0; y <= mapCanvas.height; y += d) {
         mapCtx.beginPath();
         mapCtx.moveTo(0, y);
-        mapCtx.lineTo(dispW, y);
+        mapCtx.lineTo(mapCanvas.width, y);
         mapCtx.stroke();
     }
 }
 function drawMapFlagDots() {
-    const curMap = getCurrentMap();
-    if (!curMap)
-        return;
     const bits = bitsConfig.bits;
     if (bits.length === 0)
         return;
-    const dotR = Math.max(1.5, CONFIG.dTile * 0.08);
+    const d = gridDTile();
+    const dotR = Math.max(1.5, d * 0.08);
     const pad = dotR + 1;
     const perRow = 4;
+    const curMap = getCurrentMap();
+    if (!curMap)
+        return;
+    const cols = gridMapCols();
+    const rows = gridMapRows();
     mapCtx.save();
-    for (let r = 0; r < CONFIG.mapRows; r++) {
-        for (let c = 0; c < CONFIG.mapCols; c++) {
-            const tileIdx = curMap[r][c];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const tileIdx = curMap[r]?.[c] ?? 0;
             const mask = tileFlags[tileIdx];
             if (mask === 0)
                 continue;
-            const cellX = c * CONFIG.dTile;
-            const cellY = r * CONFIG.dTile;
+            const cellX = c * d;
+            const cellY = r * d;
             let dotIdx = 0;
             for (let b = 0; b < TOTAL_BITS; b++) {
                 if (!hasBit(tileIdx, b))
@@ -874,17 +889,15 @@ function isCellInBounds(coord, cols, rows) {
     return coord.col >= 0 && coord.col < cols && coord.row >= 0 && coord.row < rows;
 }
 function placeTileOnMap(p) {
-    const curMap = getCurrentMap();
-    if (!curMap)
-        return;
-    const cell = cellFromPoint(p);
-    if (!isCellInBounds(cell, CONFIG.mapCols, CONFIG.mapRows))
+    const cell = mapCellFromPoint(p);
+    const cols = gridMapCols();
+    const rows = gridMapRows();
+    if (cell.col < 0 || cell.col >= cols || cell.row < 0 || cell.row >= rows)
         return;
     const key = `${cell.row},${cell.col}`;
     if (key === lastPlaced)
         return;
     lastPlaced = key;
-    curMap[cell.row][cell.col] = activeTile;
     drawMap();
 }
 // ─── Event handlers ───────────────────────────────────────────────────────────
@@ -918,8 +931,10 @@ mapCanvas.addEventListener('mousedown', (e) => { mouseDown = true; lastPlaced = 
 window.addEventListener('mouseup', () => { mouseDown = false; lastPlaced = null; });
 mapCanvas.addEventListener('mousemove', (e) => {
     const p = canvasCoords(e, mapCanvas);
-    const cell = cellFromPoint(p);
-    mapHover = isCellInBounds(cell, CONFIG.mapCols, CONFIG.mapRows) ? cell : { col: -1, row: -1 };
+    const cell = mapCellFromPoint(p);
+    const cols = gridMapCols();
+    const rows = gridMapRows();
+    mapHover = (cell.col >= 0 && cell.col < cols && cell.row >= 0 && cell.row < rows) ? cell : { col: -1, row: -1 };
     if (mouseDown)
         placeTileOnMap(p);
     else
@@ -936,8 +951,9 @@ tileSizeSlider.addEventListener('input', () => {
         return;
     gridTileSize = newTileSize;
     tileSizeValue.textContent = String(newTileSize);
-    // Only redraw the tilesheet grid overlay — nothing else changes
+    // Redraw both canvases with the new grid size
     drawTilesheet();
+    drawMap();
 });
 // ─── IFF building helpers ─────────────────────────────────────────────────────
 function putU16BE(buf, offset, value) {
