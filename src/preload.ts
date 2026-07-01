@@ -31,6 +31,7 @@ interface CreateProjectData {
   tileFlags: number[];
   tilesheetCols: number;
   tilesheetRows: number;
+  iffData?: number[];
   convBitplanes?: number;
 }
 

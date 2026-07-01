@@ -129,7 +129,12 @@ electron_1.ipcMain.handle('create-project', async (_event, data) => {
         const base64Data = data.pngDataUrl.replace(/^data:image\/png;base64,/, '');
         const pngBuffer = Buffer.from(base64Data, 'base64');
         fs.writeFileSync(path.join(projectDir, data.pngFileName), pngBuffer);
-        const { pngDataUrl, ...projectData } = data;
+        // Write IFF file if provided
+        if (data.iffData && data.iffData.length > 0) {
+            const iffName = data.pngFileName.replace(/\.png$/i, '.iff');
+            fs.writeFileSync(path.join(projectDir, iffName), Buffer.from(data.iffData));
+        }
+        const { pngDataUrl, iffData, ...projectData } = data;
         const projectJson = JSON.stringify(projectData, null, 2);
         fs.writeFileSync(path.join(projectDir, `${data.projectName}.project`), projectJson, 'utf-8');
         return projectDir;

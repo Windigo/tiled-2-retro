@@ -78,6 +78,8 @@ declare const editorApi: {
     tileFlags: number[];
     tilesheetCols: number;
     tilesheetRows: number;
+    iffData?: number[];
+    convBitplanes?: number;
   }) => Promise<string | null>;
   saveProjectFile: (data: {
     projectFolder: string;
@@ -534,7 +536,8 @@ function clearEditor(): void {
 
 async function createNewProject(
   projectName: string, folderPath: string, pngDataUrl: string, pngFileName: string,
-  sheetCols: number, sheetRows: number, mapCols: number, mapRows: number, firstMapName: string
+  sheetCols: number, sheetRows: number, mapCols: number, mapRows: number, firstMapName: string,
+  iffData?: number[], bitplanes?: number
 ): Promise<boolean> {
   CONFIG.mapCols = mapCols;
   CONFIG.mapRows = mapRows;
@@ -565,7 +568,8 @@ async function createNewProject(
   const resultPath = await editorApi.createProject({ projectName, folderPath, pngDataUrl, pngFileName,
     maps: maps.map(m => ({ ...m, map: m.map.map(row => [...row]) })),
     bits: bitsConfig.bits, tileFlags: [...tileFlags],
-    tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows
+    tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows,
+    iffData, convBitplanes: bitplanes
   });
   if (!resultPath) { console.error('Failed to create project folder'); return false; }
   try { await loadTilesheetFromDataUrl(pngDataUrl); } catch (err) { console.error(err); return false; }
@@ -1206,6 +1210,52 @@ bitsOnMapCheckbox.addEventListener('change', () => {
 let pickedPngDataUrl: string | null = null;
 let pickedPngFileName = '';
 let pickedFolderPath: string | null = null;
+let modalIffBytes: Uint8Array | null = null;
+let modalBp = 4;
+
+const modalBpSlider = document.getElementById('modal-bitplanes') as HTMLInputElement;
+const modalBpLabel = document.getElementById('modal-bp-label') as HTMLElement;
+const modalColorsLabel = document.getElementById('modal-colors-label') as HTMLElement;
+const modalIffPreviewRow = document.getElementById('modal-iff-preview-row')!;
+const modalIffPreviewCanvas = document.getElementById('modal-iff-preview-canvas') as HTMLCanvasElement;
+
+modalBpSlider.addEventListener('input', () => {
+  modalBp = parseInt(modalBpSlider.value);
+  const colors = 1 << modalBp;
+  modalBpLabel.textContent = String(modalBp);
+  modalColorsLabel.textContent = `${colors} color${modalBp !== 1 ? 's' : ''}`;
+  if (pickedPngDataUrl) updateModalIffPreview();
+});
+
+function updateModalIffPreview(): void {
+  if (!pickedPngDataUrl) return;
+  const img = new Image();
+  img.onload = () => {
+    const result = pngToIffMulti(img, modalBp);
+    modalIffBytes = result.iff;
+    const { palette, indexMap } = result;
+    const w = img.width;
+    const h = img.height;
+    modalIffPreviewCanvas.width = w;
+    modalIffPreviewCanvas.height = h;
+    const ctx = modalIffPreviewCanvas.getContext('2d')!;
+    ctx.imageSmoothingEnabled = false;
+    const imageData = ctx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = indexMap[y * w + x];
+        const colOff = idx * 3;
+        const pxOff = (y * w + x) * 4;
+        imageData.data[pxOff] = palette[colOff];
+        imageData.data[pxOff + 1] = palette[colOff + 1];
+        imageData.data[pxOff + 2] = palette[colOff + 2];
+        imageData.data[pxOff + 3] = 255;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+  };
+  img.src = pickedPngDataUrl;
+}
 
 document.getElementById('btn-pick-folder')!.addEventListener('click', async () => {
   const saved = localStorage.getItem('lastProjectFolder') || undefined;
@@ -1215,7 +1265,12 @@ document.getElementById('btn-pick-folder')!.addEventListener('click', async () =
 
 document.getElementById('btn-pick-png')!.addEventListener('click', async () => {
   const result = await editorApi.pickPng();
-  if (result) { pickedPngDataUrl = result.dataUrl; pickedPngFileName = result.fileName; document.getElementById('png-file-name')!.textContent = result.fileName; }
+  if (!result) return;
+  pickedPngDataUrl = result.dataUrl;
+  pickedPngFileName = result.fileName;
+  document.getElementById('png-file-name')!.textContent = result.fileName;
+  modalIffPreviewRow.style.display = 'block';
+  updateModalIffPreview();
 });
 
 document.getElementById('btn-modal-cancel')!.addEventListener('click', () => document.getElementById('new-project-overlay')!.classList.add('hidden'));
@@ -1239,7 +1294,8 @@ document.getElementById('btn-modal-create')!.addEventListener('click', async () 
   const mapRows = parseInt((document.getElementById('input-map-rows') as HTMLInputElement).value) || 16;
   for (let i = 0; i < MAX_TILES; i++) tileFlags[i] = 0;
   document.getElementById('new-project-overlay')!.classList.add('hidden');
-  await createNewProject(projectName, pickedFolderPath, pickedPngDataUrl, pickedPngFileName, sheetCols, sheetRows, mapCols, mapRows, firstMapName);
+  await createNewProject(projectName, pickedFolderPath, pickedPngDataUrl, pickedPngFileName, sheetCols, sheetRows, mapCols, mapRows, firstMapName,
+    modalIffBytes ? Array.from(modalIffBytes) : undefined, modalBp);
 });
 
 // ─── Rename project ────────────────────────────────────────────────────────
@@ -1364,6 +1420,8 @@ function handleMenuAction(action: string): void {
     case 'new':
       switchTab('level-editor');
       pickedPngDataUrl = null; pickedPngFileName = ''; pickedFolderPath = null;
+      modalIffBytes = null; modalBp = 4; modalBpSlider.value = '4'; modalBpLabel.textContent = '4'; modalColorsLabel.textContent = '16 colors';
+      modalIffPreviewRow.style.display = 'none';
       document.getElementById('png-file-name')!.textContent = 'no file selected';
       document.getElementById('folder-path')!.textContent = 'no folder selected';
       (document.getElementById('input-project-name') as HTMLInputElement).value = 'MyProject';

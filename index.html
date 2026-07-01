@@ -102,6 +102,13 @@
               <span id="png-file-name" class="file-name">no file selected</span>
             </div>
           </div>
+          <div id="modal-iff-preview-row" style="display:none; margin-bottom:14px;">
+            <div class="form-group">
+              <label>Bitplanes: <strong id="modal-bp-label">4</strong> (<span id="modal-colors-label">16 colors</span>)</label>
+              <input type="range" id="modal-bitplanes" min="1" max="8" value="4" step="1">
+            </div>
+            <canvas id="modal-iff-preview-canvas" style="max-width:200px; max-height:160px; image-rendering:pixelated;"></canvas>
+          </div>
           <div class="form-group">
             <label>Tilesheet columns</label>
             <input type="number" id="input-sheet-cols" value="20" min="1" max="99">
