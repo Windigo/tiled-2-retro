@@ -12,7 +12,7 @@ const MAP_H = MAP_ROWS * TILE_SIZE;
 const SHEET_W = TILESHEET_COLS * TILE_SIZE;
 const SHEET_H = TILESHEET_ROWS * TILE_SIZE;
 const MAX_TILES = TILESHEET_COLS * TILESHEET_ROWS;
-const TOTAL_BITS = 16; // fixed 16 BTST flags
+const TOTAL_BITS = 16;
 const CONFIG = {
     tileSize: TILE_SIZE,
     scale: SCALE,
@@ -35,26 +35,18 @@ const activeTileSpan = document.getElementById('active-tile-id');
 const flagsColumn = document.getElementById('flags-column');
 const bitsOnMapCheckbox = document.getElementById('chk-bits-on-map');
 // ─── State ────────────────────────────────────────────────────────────────────
-/** All maps/levels in the current project. */
 let maps = [];
-/** Index of the currently displayed map. */
 let currentMapIndex = 0;
-/** Convenience: returns the current map's grid data. */
 function getCurrentMap() { return maps[currentMapIndex]?.map ?? []; }
-/** Convenience: returns the current map's entry. */
 function getCurrentMapEntry() { return maps[currentMapIndex]; }
 let activeTile = 0;
 let mouseDown = false;
 let lastPlaced = null;
 let sheetHover = { col: -1, row: -1 };
 let mapHover = { col: -1, row: -1 };
-// BTST per‑tile bitmasks (16‑bit mask per tile index, 0–65535)
 const tileFlags = new Array(MAX_TILES).fill(0);
-// Currently selected bit index for toggling
 let activeBitIndex = 0;
-// Bit definitions — always 16 entries
 let bitsConfig = { bits: [], tileFlags: [] };
-// Project state
 let tilesheet = null;
 let projectLoaded = false;
 let currentProjectPath = '';
@@ -66,11 +58,9 @@ mapCanvas.height = CONFIG.mapH * CONFIG.scale;
 tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
 tilesCanvas.height = CONFIG.sheetH * CONFIG.scale;
 // ─── Bit helpers ──────────────────────────────────────────────────────────────
-/** Check if a specific bit is set in the per‑tile mask (16‑bit). */
 function hasBit(tileIdx, bitIdx) {
     return (tileFlags[tileIdx] & (1 << bitIdx)) !== 0;
 }
-/** Toggle a specific bit in the per‑tile mask, clamping to 16 bits. */
 function toggleBit(tileIdx, bitIdx) {
     if (bitIdx < 0 || bitIdx >= TOTAL_BITS)
         return;
@@ -89,8 +79,10 @@ function initSingleMap(cols, rows) {
     return { name: 'Level 1', map: createEmptyGrid(cols, rows), mapCols: cols, mapRows: rows };
 }
 // ─── Map tabs UI ──────────────────────────────────────────────────────────────
+let dragSrcIndex = null;
+const mapTabsContainer = document.getElementById('map-tabs');
 function renderMapTabs() {
-    const container = document.getElementById('map-tabs');
+    const container = mapTabsContainer;
     let html = '';
     for (let i = 0; i < maps.length; i++) {
         const entry = maps[i];
@@ -103,9 +95,6 @@ function renderMapTabs() {
     html += `<button id="btn-add-map" class="map-tab-add" title="Add new map">+</button>`;
     container.innerHTML = html;
 }
-// ─── Map tabs: event delegation for click, right-click, and drag ─────────
-const mapTabsContainer = document.getElementById('map-tabs');
-// Click: switch or rename active tab
 mapTabsContainer.addEventListener('click', (e) => {
     const target = e.target;
     if (target.id === 'btn-add-map') {
@@ -128,11 +117,10 @@ mapTabsContainer.addEventListener('click', (e) => {
         switchToMap(idx);
     }
 });
-// Right-click on a map tab → rename
 mapTabsContainer.addEventListener('contextmenu', (e) => {
     const target = e.target;
     if (target.classList.contains('map-tab-del'))
-        return; // ignore on delete btn
+        return;
     const tab = target.closest('.map-tab');
     if (!tab)
         return;
@@ -140,19 +128,14 @@ mapTabsContainer.addEventListener('contextmenu', (e) => {
     const idx = parseInt(tab.dataset.index, 10);
     startRenameMap(idx);
 });
-// ─── Drag & Drop for map reorder ────────────────────────────────────────
-let dragSrcIndex = null;
-/** Update drop indicator and return the insertion index (vertical layout). */
 function updateDropIndicator(clientY) {
     const tabs = mapTabsContainer.querySelectorAll('.map-tab');
     const containerRect = mapTabsContainer.getBoundingClientRect();
     const relativeY = clientY - containerRect.top;
-    // Clear all indicators
     tabs.forEach(t => t.classList.remove('drop-before', 'drop-after'));
-    // Find the closest tab edge to the cursor (skipping the dragged tab)
     let bestTab = null;
     let bestDist = Infinity;
-    let insertAfter = false; // false = insert before, true = insert after
+    let insertAfter = false;
     for (let i = 0; i < tabs.length; i++) {
         const tab = tabs[i];
         if (tab.dataset.index === String(dragSrcIndex))
@@ -162,7 +145,6 @@ function updateDropIndicator(clientY) {
         const bottom = r.bottom - containerRect.top;
         const mid = top + r.height / 2;
         if (relativeY < mid) {
-            // Cursor is on the top half → insert before this tab
             const dist = Math.abs(relativeY - top);
             if (dist < bestDist) {
                 bestDist = dist;
@@ -171,7 +153,6 @@ function updateDropIndicator(clientY) {
             }
         }
         else {
-            // Cursor is on the bottom half → insert after this tab
             const dist = Math.abs(relativeY - bottom);
             if (dist < bestDist) {
                 bestDist = dist;
@@ -181,18 +162,14 @@ function updateDropIndicator(clientY) {
         }
     }
     if (bestTab) {
-        if (insertAfter) {
+        if (insertAfter)
             bestTab.classList.add('drop-after');
-        }
-        else {
+        else
             bestTab.classList.add('drop-before');
-        }
     }
-    // Calculate insertion index among ALL tabs
     if (!bestTab)
         return maps.length;
-    const bestIdx = parseInt(bestTab.dataset.index, 10);
-    return insertAfter ? bestIdx + 1 : bestIdx;
+    return insertAfter ? parseInt(bestTab.dataset.index, 10) + 1 : parseInt(bestTab.dataset.index, 10);
 }
 function clearDropIndicators() {
     mapTabsContainer.querySelectorAll('.map-tab.drop-before, .map-tab.drop-after').forEach(el => {
@@ -205,10 +182,8 @@ mapTabsContainer.addEventListener('dragstart', (e) => {
         return;
     dragSrcIndex = parseInt(tab.dataset.index, 10);
     e.dataTransfer.effectAllowed = 'move';
-    // Set the drop gap to match the dragged tab's height
     const gapSize = tab.offsetHeight + 4;
     mapTabsContainer.style.setProperty('--drop-gap', gapSize + 'px');
-    // Disable pointer events on children so dragleave doesn't flicker
     tab.querySelectorAll('.map-tab-name, .map-tab-del').forEach(el => el.style.pointerEvents = 'none');
 });
 mapTabsContainer.addEventListener('dragover', (e) => {
@@ -220,16 +195,14 @@ mapTabsContainer.addEventListener('dragover', (e) => {
 });
 mapTabsContainer.addEventListener('dragleave', (e) => {
     const related = e.relatedTarget;
-    if (!related || !mapTabsContainer.contains(related)) {
+    if (!related || !mapTabsContainer.contains(related))
         clearDropIndicators();
-    }
 });
 mapTabsContainer.addEventListener('drop', (e) => {
     e.preventDefault();
     clearDropIndicators();
     if (dragSrcIndex === null)
         return;
-    // Calculate insert index — same logic as updateDropIndicator but without visual updates
     const clientY = e.clientY;
     const tabs = mapTabsContainer.querySelectorAll('.map-tab');
     const containerRect = mapTabsContainer.getBoundingClientRect();
@@ -260,9 +233,8 @@ mapTabsContainer.addEventListener('drop', (e) => {
     }
     const [moved] = maps.splice(dragSrcIndex, 1);
     maps.splice(adjustedTo, 0, moved);
-    if (dragSrcIndex === currentMapIndex) {
+    if (dragSrcIndex === currentMapIndex)
         currentMapIndex = adjustedTo;
-    }
     else {
         if (dragSrcIndex < currentMapIndex && adjustedTo >= currentMapIndex)
             currentMapIndex--;
@@ -305,7 +277,6 @@ function addNewMap() {
     switchToMap(maps.length - 1);
     showToast('Map added: ' + name, 'success');
 }
-/** Index of map currently being renamed (or -1 if none). */
 let renameMapIndex = -1;
 function startRenameMap(index) {
     const entry = maps[index];
@@ -336,7 +307,6 @@ function finishRenameMap() {
     document.getElementById('rename-map-overlay').classList.add('hidden');
     renameMapIndex = -1;
 }
-/** Index of map pending deletion (or -1 if none). */
 let deleteMapIndex = -1;
 function deleteMap(index) {
     if (maps.length <= 1) {
@@ -347,8 +317,7 @@ function deleteMap(index) {
     if (!entry)
         return;
     deleteMapIndex = index;
-    document.getElementById('delete-map-message').textContent =
-        `Delete "${entry.name}"? This cannot be undone.`;
+    document.getElementById('delete-map-message').textContent = `Delete "${entry.name}"? This cannot be undone.`;
     document.getElementById('delete-map-overlay').classList.remove('hidden');
 }
 function confirmDeleteMap() {
@@ -371,15 +340,13 @@ function confirmDeleteMap() {
     deleteMapIndex = -1;
 }
 // ─── DEFAULT BITS ─────────────────────────────────────────────────────────────
-/** Ensure bitsConfig has exactly 16 bit definitions. */
 function ensureBits() {
     while (bitsConfig.bits.length < TOTAL_BITS) {
         bitsConfig.bits.push({ name: '', color: '#888888' });
     }
-    // Trim to exactly 16
     bitsConfig.bits = bitsConfig.bits.slice(0, TOTAL_BITS);
 }
-// ─── Toast / Snackbar ─────────────────────────────────────────────────────
+// ─── Toast ─────────────────────────────────────────────────────────────────
 let toastTimer = null;
 function showToast(message, type = 'success', durationMs = 2500) {
     const el = document.getElementById('toast');
@@ -387,13 +354,9 @@ function showToast(message, type = 'success', durationMs = 2500) {
         clearTimeout(toastTimer);
     el.textContent = message;
     el.className = 'toast ' + type;
-    // Force reflow so the transition plays
     void el.offsetWidth;
     el.classList.remove('hidden');
-    toastTimer = setTimeout(() => {
-        el.classList.add('hidden');
-        toastTimer = null;
-    }, durationMs);
+    toastTimer = setTimeout(() => { el.classList.add('hidden'); toastTimer = null; }, durationMs);
 }
 // ─── Project management ───────────────────────────────────────────────────────
 function updateProjectUI() {
@@ -411,14 +374,8 @@ function updateProjectUI() {
 function loadTilesheetFromDataUrl(dataUrl) {
     return new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = () => {
-            tilesheet = img;
-            projectLoaded = true;
-            resolve();
-        };
-        img.onerror = () => {
-            reject(new Error('Failed to load tilesheet image'));
-        };
+        img.onload = () => { tilesheet = img; projectLoaded = true; resolve(); };
+        img.onerror = () => { reject(new Error('Failed to load tilesheet image')); };
         img.src = dataUrl;
     });
 }
@@ -453,50 +410,25 @@ async function createNewProject(projectName, folderPath, pngDataUrl, pngFileName
     mapCanvas.height = CONFIG.mapH * CONFIG.scale;
     tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
     tilesCanvas.height = CONFIG.sheetH * CONFIG.scale;
-    // Create the initial map with the user-given name
-    const initialMap = {
-        name: firstMapName,
-        map: createEmptyGrid(mapCols, mapRows),
-        mapCols,
-        mapRows
-    };
+    const initialMap = { name: firstMapName, map: createEmptyGrid(mapCols, mapRows), mapCols, mapRows };
     maps = [initialMap];
     currentMapIndex = 0;
     for (let i = 0; i < MAX_TILES; i++)
         tileFlags[i] = 0;
     bitsConfig = {
         bits: [
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
-            { name: '', color: '#888888' },
+            { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' },
+            { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' },
+            { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' },
+            { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' }, { name: '', color: '#888888' },
         ],
         tileFlags: new Array(MAX_TILES).fill(0)
     };
     ensureBits();
-    // Create project folder on disk via IPC
-    const resultPath = await editorApi.createProject({
-        projectName,
-        folderPath,
-        pngDataUrl,
-        pngFileName,
+    const resultPath = await editorApi.createProject({ projectName, folderPath, pngDataUrl, pngFileName,
         maps: maps.map(m => ({ ...m, map: m.map.map(row => [...row]) })),
-        bits: bitsConfig.bits,
-        tileFlags: [...tileFlags],
-        tilesheetCols: CONFIG.tilesheetCols,
-        tilesheetRows: CONFIG.tilesheetRows
+        bits: bitsConfig.bits, tileFlags: [...tileFlags],
+        tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows
     });
     if (!resultPath) {
         console.error('Failed to create project folder');
@@ -512,7 +444,6 @@ async function createNewProject(projectName, folderPath, pngDataUrl, pngFileName
     currentProjectPath = resultPath;
     currentProjectName = projectName;
     currentPngFileName = pngFileName;
-    // Save parent folder so next New Project starts in the right place
     const parentFolder = folderPath.substring(0, folderPath.lastIndexOf('/'));
     if (parentFolder)
         localStorage.setItem('lastProjectFolder', parentFolder);
@@ -533,22 +464,17 @@ async function saveProject() {
     }
     const projectName = currentProjectName.replace(/\.project$/, '');
     const success = await editorApi.saveProjectFile({
-        projectFolder: currentProjectPath,
-        projectName,
-        pngFileName: currentPngFileName,
+        projectFolder: currentProjectPath, projectName, pngFileName: currentPngFileName,
         maps: maps.map(m => ({ ...m, map: m.map.map(row => [...row]) })),
-        bits: bitsConfig.bits,
-        tileFlags: [...tileFlags],
-        tilesheetCols: CONFIG.tilesheetCols,
-        tilesheetRows: CONFIG.tilesheetRows
+        bits: bitsConfig.bits, tileFlags: [...tileFlags],
+        tilesheetCols: CONFIG.tilesheetCols, tilesheetRows: CONFIG.tilesheetRows
     });
     if (success) {
         updateProjectUI();
         showToast('Project saved', 'success');
     }
-    else {
+    else
         showToast('Failed to save project', 'error');
-    }
 }
 async function loadProject() {
     const saved = localStorage.getItem('lastProjectFolder') || undefined;
@@ -567,25 +493,17 @@ async function applyLoadedProject(result) {
     CONFIG.sheetH = data.tilesheetRows * CONFIG.tileSize;
     tilesCanvas.width = CONFIG.sheetW * CONFIG.scale;
     tilesCanvas.height = CONFIG.sheetH * CONFIG.scale;
-    // ── Load maps (new multi-map format or legacy single-map fallback) ──
     if (data.maps && Array.isArray(data.maps) && data.maps.length > 0) {
-        maps = data.maps.map((m) => ({
-            name: m.name || 'Level',
-            map: m.map.map((row) => [...row]),
-            mapCols: m.mapCols,
-            mapRows: m.mapRows
-        }));
+        maps = data.maps.map((m) => ({ name: m.name || 'Level', map: m.map.map((row) => [...row]), mapCols: m.mapCols, mapRows: m.mapRows }));
     }
     else if (data.map && Array.isArray(data.map)) {
-        // Legacy: single map at top level
         const mCols = data.mapCols || CONFIG.mapCols;
         const mRows = data.mapRows || CONFIG.mapRows;
         const legacyMap = [];
         for (let r = 0; r < Math.min(data.map.length, mRows); r++) {
             legacyMap[r] = [];
-            for (let c = 0; c < Math.min(data.map[r].length, mCols); c++) {
+            for (let c = 0; c < Math.min(data.map[r].length, mCols); c++)
                 legacyMap[r][c] = data.map[r][c];
-            }
         }
         maps = [{ name: 'Level 1', map: legacyMap, mapCols: mCols, mapRows: mRows }];
     }
@@ -601,15 +519,10 @@ async function applyLoadedProject(result) {
     CONFIG.mapH = entry.mapRows * CONFIG.tileSize;
     mapCanvas.width = CONFIG.mapW * CONFIG.scale;
     mapCanvas.height = CONFIG.mapH * CONFIG.scale;
-    bitsConfig = {
-        bits: data.bits,
-        tileFlags: data.tileFlags
-    };
+    bitsConfig = { bits: data.bits, tileFlags: data.tileFlags };
     ensureBits();
-    for (let i = 0; i < Math.min(data.tileFlags.length, MAX_TILES); i++) {
+    for (let i = 0; i < Math.min(data.tileFlags.length, MAX_TILES); i++)
         tileFlags[i] = data.tileFlags[i];
-    }
-    // Load tilesheet from the PNG file in the project folder
     const pngPath = projectFolder + '/' + data.pngFileName;
     const pngDataUrl = await editorApi.loadPngFile(pngPath);
     if (!pngDataUrl) {
@@ -626,7 +539,6 @@ async function applyLoadedProject(result) {
     currentProjectPath = projectFolder;
     currentProjectName = projectName;
     currentPngFileName = data.pngFileName || 'tilesheet.png';
-    // Save parent folder so next New Project starts here
     const parentFolder = projectFolder.substring(0, projectFolder.lastIndexOf('/'));
     if (parentFolder)
         localStorage.setItem('lastProjectFolder', parentFolder);
@@ -637,7 +549,6 @@ async function applyLoadedProject(result) {
     drawMap();
     updateActiveDisplay();
     updateProjectUI();
-    // Check if there's already an Amiga export in the project folder
     const hasExport = await editorApi.checkAmigaExport(projectFolder);
     setPreviewEnabled(hasExport);
     showToast('Project loaded: ' + projectName, 'success');
@@ -667,9 +578,8 @@ function drawMap() {
         }
     }
     drawMapGrid();
-    if (bitsOnMapCheckbox.checked) {
+    if (bitsOnMapCheckbox.checked)
         drawMapFlagDots();
-    }
     drawMapGhost();
 }
 function drawMapGhost() {
@@ -703,7 +613,6 @@ function drawMapGrid() {
         mapCtx.stroke();
     }
 }
-/** Draw small colored dots on map tiles indicating which flags are set. */
 function drawMapFlagDots() {
     const curMap = getCurrentMap();
     if (!curMap)
@@ -754,7 +663,6 @@ function drawTilesheet() {
     drawSheetHover();
     drawActiveHighlight();
 }
-/** Draw small colored dots on each tile indicating which flags are set. */
 function drawFlagDots() {
     const bits = bitsConfig.bits;
     if (bits.length === 0)
@@ -824,11 +732,9 @@ function drawActiveHighlight() {
     tilesCtx.lineWidth = 2.5;
     tilesCtx.strokeRect(sx + 1, sy + 1, CONFIG.dTile - 2, CONFIG.dTile - 2);
 }
-// ─── Active‑tile display ──────────────────────────────────────────────────────
 function updateActiveDisplay() {
     const col = activeTile % CONFIG.tilesheetCols;
     const row = Math.floor(activeTile / CONFIG.tilesheetCols);
-    // list flags set on this tile
     const setNames = [];
     for (let b = 0; b < TOTAL_BITS; b++) {
         if (hasBit(activeTile, b)) {
@@ -845,19 +751,15 @@ function renderFlagsUI() {
     for (let i = 0; i < TOTAL_BITS; i++) {
         const bit = bitsConfig.bits[i];
         const isActive = i === activeBitIndex;
-        // ── Build row ──────────────────────────────────────────────────────────
         const row = document.createElement('div');
         row.className = 'flag-row' + (isActive ? ' active' : '');
-        if (!bit.name) {
+        if (!bit.name)
             row.classList.add('unused');
-        }
         row.dataset.bitIndex = String(i);
-        // Bit number label
         const numSpan = document.createElement('span');
         numSpan.className = 'flag-bit-num';
         numSpan.textContent = String(i);
         row.appendChild(numSpan);
-        // Color indicator (clickable, wraps a real <input type=color>)
         const colorWrap = document.createElement('label');
         colorWrap.className = 'flag-color';
         colorWrap.style.backgroundColor = bit.color;
@@ -873,11 +775,9 @@ function renderFlagsUI() {
             drawTilesheet();
             drawMap();
         });
-        // Prevent color picker click from also selecting the flag row
         colorInput.addEventListener('click', (e) => e.stopPropagation());
         colorWrap.appendChild(colorInput);
         row.appendChild(colorWrap);
-        // Name text input
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
         nameInput.className = 'flag-name';
@@ -890,21 +790,14 @@ function renderFlagsUI() {
             drawTilesheet();
             drawMap();
             updateActiveDisplay();
-            // Update row styling
-            if (nameInput.value) {
+            if (nameInput.value)
                 row.classList.remove('unused');
-            }
-            else {
+            else
                 row.classList.add('unused');
-            }
         });
         nameInput.addEventListener('click', (e) => e.stopPropagation());
         row.appendChild(nameInput);
-        // Click row to select this bit as active
-        row.addEventListener('click', () => {
-            activeBitIndex = i;
-            renderFlagsUI();
-        });
+        row.addEventListener('click', () => { activeBitIndex = i; renderFlagsUI(); });
         flagsColumn.appendChild(row);
     }
 }
@@ -916,30 +809,22 @@ async function saveBitsConfig() {
         console.error('Failed to save full config:', err);
     }
 }
-// ─── Tile‑index helpers ───────────────────────────────────────────────────────
+// ─── Tile index helpers ───────────────────────────────────────────────────────
 function tileIndexFromCoord(col, row) {
     return row * CONFIG.tilesheetCols + col;
 }
-// ─── Coordinate helpers ───────────────────────────────────────────────────────
 function canvasCoords(e, canvas) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY
-    };
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
 }
 function cellFromPoint(p) {
-    return {
-        col: Math.floor(p.x / CONFIG.dTile),
-        row: Math.floor(p.y / CONFIG.dTile)
-    };
+    return { col: Math.floor(p.x / CONFIG.dTile), row: Math.floor(p.y / CONFIG.dTile) };
 }
 function isCellInBounds(coord, cols, rows) {
     return coord.col >= 0 && coord.col < cols && coord.row >= 0 && coord.row < rows;
 }
-// ─── Map editing ──────────────────────────────────────────────────────────────
 function placeTileOnMap(p) {
     const curMap = getCurrentMap();
     if (!curMap)
@@ -954,20 +839,18 @@ function placeTileOnMap(p) {
     curMap[cell.row][cell.col] = activeTile;
     drawMap();
 }
-// ─── EVENT HANDLERS ───────────────────────────────────────────────────────────
+// ─── Event handlers ───────────────────────────────────────────────────────────
 tilesCanvas.addEventListener('mousedown', (e) => {
     const p = canvasCoords(e, tilesCanvas);
     const cell = cellFromPoint(p);
     if (!isCellInBounds(cell, CONFIG.tilesheetCols, CONFIG.tilesheetRows))
         return;
     if (e.button === 0) {
-        // Left click — select tile
         activeTile = tileIndexFromCoord(cell.col, cell.row);
         updateActiveDisplay();
         drawTilesheet();
     }
     else if (e.button === 2) {
-        // Right click — toggle active bit on this tile
         const idx = tileIndexFromCoord(cell.col, cell.row);
         toggleBit(idx, activeBitIndex);
         saveBitsConfig();
@@ -979,66 +862,34 @@ tilesCanvas.addEventListener('mousedown', (e) => {
 tilesCanvas.addEventListener('mousemove', (e) => {
     const p = canvasCoords(e, tilesCanvas);
     const cell = cellFromPoint(p);
-    if (isCellInBounds(cell, CONFIG.tilesheetCols, CONFIG.tilesheetRows)) {
-        sheetHover = cell;
-    }
-    else {
-        sheetHover = { col: -1, row: -1 };
-    }
+    sheetHover = isCellInBounds(cell, CONFIG.tilesheetCols, CONFIG.tilesheetRows) ? cell : { col: -1, row: -1 };
     drawTilesheet();
 });
-tilesCanvas.addEventListener('mouseleave', () => {
-    sheetHover = { col: -1, row: -1 };
-    drawTilesheet();
-});
-mapCanvas.addEventListener('mousedown', (e) => {
-    mouseDown = true;
-    lastPlaced = null;
-    placeTileOnMap(canvasCoords(e, mapCanvas));
-});
-window.addEventListener('mouseup', () => {
-    mouseDown = false;
-    lastPlaced = null;
-});
+tilesCanvas.addEventListener('mouseleave', () => { sheetHover = { col: -1, row: -1 }; drawTilesheet(); });
+mapCanvas.addEventListener('mousedown', (e) => { mouseDown = true; lastPlaced = null; placeTileOnMap(canvasCoords(e, mapCanvas)); });
+window.addEventListener('mouseup', () => { mouseDown = false; lastPlaced = null; });
 mapCanvas.addEventListener('mousemove', (e) => {
     const p = canvasCoords(e, mapCanvas);
     const cell = cellFromPoint(p);
-    if (isCellInBounds(cell, CONFIG.mapCols, CONFIG.mapRows)) {
-        mapHover = cell;
-    }
-    else {
-        mapHover = { col: -1, row: -1 };
-    }
-    if (mouseDown) {
+    mapHover = isCellInBounds(cell, CONFIG.mapCols, CONFIG.mapRows) ? cell : { col: -1, row: -1 };
+    if (mouseDown)
         placeTileOnMap(p);
-    }
-    else {
+    else
         drawMap();
-    }
 });
-mapCanvas.addEventListener('mouseleave', () => {
-    mapHover = { col: -1, row: -1 };
-    drawMap();
-});
-[mapCanvas, tilesCanvas].forEach((c) => {
-    c.addEventListener('contextmenu', (e) => e.preventDefault());
-});
-// ─── BUTTONS ──────────────────────────────────────────────────────────────────
-// (All old buttons removed; only the ZIP export remains via the menu)
-// ===== Amiga ZIP export (map + iff tilesheet + AmiBlitz3 loader) =====
-/** Write a big‑endian UINT16 into a Uint8Array. */
+mapCanvas.addEventListener('mouseleave', () => { mapHover = { col: -1, row: -1 }; drawMap(); });
+[mapCanvas, tilesCanvas].forEach(c => c.addEventListener('contextmenu', (e) => e.preventDefault()));
+// ─── IFF building helpers ─────────────────────────────────────────────────────
 function putU16BE(buf, offset, value) {
     buf[offset] = (value >> 8) & 0xFF;
     buf[offset + 1] = value & 0xFF;
 }
-/** Write a big‑endian UINT32 into a Uint8Array. */
 function putU32BE(buf, offset, value) {
     buf[offset] = (value >> 24) & 0xFF;
     buf[offset + 1] = (value >> 16) & 0xFF;
     buf[offset + 2] = (value >> 8) & 0xFF;
     buf[offset + 3] = value & 0xFF;
 }
-/** Build the binary .map file (AB3M format). */
 function buildMapBinary() {
     const curMap = getCurrentMap();
     if (!curMap)
@@ -1049,17 +900,13 @@ function buildMapBinary() {
     const flagsSize = numTiles * 2;
     const totalSize = headerSize + gridSize + flagsSize;
     const buf = new Uint8Array(totalSize);
-    // Magic "AB3M"
     buf[0] = 0x41;
     buf[1] = 0x42;
     buf[2] = 0x33;
     buf[3] = 0x4D;
-    // Version 1
     putU16BE(buf, 4, 1);
-    // Dimensions
     putU16BE(buf, 6, CONFIG.mapCols);
     putU16BE(buf, 8, CONFIG.mapRows);
-    // Max tile count
     putU16BE(buf, 10, numTiles);
     let off = headerSize;
     for (let r = 0; r < CONFIG.mapRows; r++) {
@@ -1074,38 +921,25 @@ function buildMapBinary() {
     }
     return buf;
 }
-/**
- * Encode the tilesheet canvas into a 1‑bitplane IFF/ILBM file (word‑aligned rows).
- * Returns the raw ILBM bytes ready to write to disk or embed in a ZIP.
- */
 function buildIffTilesheet() {
     if (!tilesheet)
         throw new Error('No tilesheet loaded');
-    const w = CONFIG.sheetW; // 320
-    const h = CONFIG.sheetH; // 320
-    // Word‑aligned bytes per row for a single bitplane
+    const w = CONFIG.sheetW;
+    const h = CONFIG.sheetH;
     const bytesPerRow = ((w + 15) >> 4) << 1;
-    // Read pixel data from the tilesCanvas (which is scaled, so we need the original unscaled 1:1 image).
-    // We draw the unscaled tilesheet onto a temporary 1:1 canvas.
     const tmp = document.createElement('canvas');
     tmp.width = w;
     tmp.height = h;
     const ctx = tmp.getContext('2d');
-    // drawImage with source at 0,0,w,h in tilesheet (the original 320×320 un‑scaled Image),
-    // destination at 0,0,w,h in the tmp canvas.
     ctx.drawImage(tilesheet, 0, 0, w, h, 0, 0, w, h);
     const imgData = ctx.getImageData(0, 0, w, h);
-    const pixels = imgData.data; // RGBA
-    // Build BODY — interleaved bitmap (single bitplane, so just one plane)
+    const pixels = imgData.data;
     const body = new Uint8Array(h * bytesPerRow);
     for (let y = 0; y < h; y++) {
         const rowOff = y * bytesPerRow;
         for (let x = 0; x < w; x++) {
             const pxOff = (y * w + x) * 4;
-            const r = pixels[pxOff];
-            const g = pixels[pxOff + 1];
-            const b = pixels[pxOff + 2];
-            // Treat any non‑black pixel as "set" (white)
+            const r = pixels[pxOff], g = pixels[pxOff + 1], b = pixels[pxOff + 2];
             if (r > 127 || g > 127 || b > 127) {
                 const byteIdx = x >> 3;
                 const bitIdx = 7 - (x & 7);
@@ -1113,7 +947,6 @@ function buildIffTilesheet() {
             }
         }
     }
-    // ── Helper: build an IFF chunk ──────────────────────────────────────
     function iffChunk(type, data) {
         const out = new Uint8Array(8 + data.length);
         for (let i = 0; i < 4; i++)
@@ -1122,31 +955,28 @@ function buildIffTilesheet() {
         out.set(data, 8);
         return out;
     }
-    // BMHD chunk (20 bytes)
     const bmhd = new Uint8Array(20);
-    putU16BE(bmhd, 0, w); // width
-    putU16BE(bmhd, 2, h); // height
-    putU16BE(bmhd, 4, 0); // x origin
-    putU16BE(bmhd, 6, 0); // y origin
-    bmhd[8] = 1; // nPlanes = 1
-    bmhd[9] = 0; // masking = none
-    bmhd[10] = 0; // compression = none
-    bmhd[11] = 0; // pad
-    putU16BE(bmhd, 12, 0); // transparent color
+    putU16BE(bmhd, 0, w);
+    putU16BE(bmhd, 2, h);
+    putU16BE(bmhd, 4, 0);
+    putU16BE(bmhd, 6, 0);
+    bmhd[8] = 1;
+    bmhd[9] = 0;
+    bmhd[10] = 0;
+    bmhd[11] = 0;
+    putU16BE(bmhd, 12, 0);
     bmhd[14] = 44;
-    bmhd[15] = 52; // xAspect, yAspect (PAL 320x256)
-    putU16BE(bmhd, 16, w); // page width
-    putU16BE(bmhd, 18, h); // page height
-    // CMAP chunk – 2 colours: black (0,0,0) and white (255,255,255)
+    bmhd[15] = 52;
+    putU16BE(bmhd, 16, w);
+    putU16BE(bmhd, 18, h);
     const cmap = new Uint8Array([0, 0, 0, 255, 255, 255]);
     const bmhdChunk = iffChunk('BMHD', bmhd);
     const cmapChunk = iffChunk('CMAP', cmap);
     const bodyChunk = iffChunk('BODY', body);
-    // FORM = 'FORM' + len(ILBM + chunks) + 'ILBM' + chunks
     const ilbmInner = new Uint8Array(4 + bmhdChunk.length + cmapChunk.length + bodyChunk.length);
     let p = 0;
     ilbmInner.set([0x49, 0x4C, 0x42, 0x4D], p);
-    p += 4; // "ILBM"
+    p += 4;
     ilbmInner.set(bmhdChunk, p);
     p += bmhdChunk.length;
     ilbmInner.set(cmapChunk, p);
@@ -1154,20 +984,11 @@ function buildIffTilesheet() {
     ilbmInner.set(bodyChunk, p);
     p += bodyChunk.length;
     const form = new Uint8Array(8 + ilbmInner.length);
-    form.set([0x46, 0x4F, 0x52, 0x4D], 0); // "FORM"
+    form.set([0x46, 0x4F, 0x52, 0x4D], 0);
     putU32BE(form, 4, ilbmInner.length);
     form.set(ilbmInner, 8);
     return form;
 }
-/**
- * Generate an AmiBlitz3 (.ab3) source file that:
- *  • Loads the .map file
- *  • Loads & displays the tiles.iff as a bitmap
- *  • Renders the map using Blit operations
- *
- *  IMPORTANT: The output uses only 7‑bit ASCII characters.
- *  AmiBlitz3 does not understand UTF‑8 or Latin‑1 extended chars.
- */
 function buildAmiBlitz3Loader() {
     const mapW = CONFIG.mapCols;
     const mapH = CONFIG.mapRows;
@@ -1176,13 +997,8 @@ function buildAmiBlitz3Loader() {
     const tileSize = CONFIG.tileSize;
     const maxTiles = MAX_TILES;
     const tilesheetCols = CONFIG.tilesheetCols;
-    // Build bit-name comments for the source
-    const bitComments = bitsConfig.bits
-        .map((b, i) => `;   Bit ${i}: ${b.name || '(unused)'}`)
-        .join('\n');
+    const bitComments = bitsConfig.bits.map((b, i) => `;   Bit ${i}: ${b.name || '(unused)'}`).join('\n');
     const curMap = getCurrentMap();
-    // Build tile grid Data.w lines — flatten row‑major, then split into chunks
-    // of 16 values per line to avoid AmiBlitz3 "String too long" errors.
     const gridDataLines = [];
     const allGridVals = [];
     for (let r = 0; r < mapH; r++) {
@@ -1190,42 +1006,33 @@ function buildAmiBlitz3Loader() {
             allGridVals.push(curMap?.[r]?.[c] ?? 0);
         }
     }
-    const gridChunkSize = 16;
-    for (let i = 0; i < allGridVals.length; i += gridChunkSize) {
-        gridDataLines.push(`Data.w ${allGridVals.slice(i, i + gridChunkSize).join(',')}`);
+    for (let i = 0; i < allGridVals.length; i += 16) {
+        gridDataLines.push(`Data.w ${allGridVals.slice(i, i + 16).join(',')}`);
     }
-    // Build tile flags Data.w lines (split into chunks of 16 to avoid "string too long")
     const flagChunks = [];
-    const flagChunkSize = 16;
-    for (let i = 0; i < maxTiles; i += flagChunkSize) {
+    for (let i = 0; i < maxTiles; i += 16) {
         const chunk = [];
-        for (let j = i; j < Math.min(i + flagChunkSize, maxTiles); j++) {
+        for (let j = i; j < Math.min(i + 16, maxTiles); j++)
             chunk.push(tileFlags[j]);
-        }
         flagChunks.push(`Data.w ${chunk.join(',')}`);
     }
-    const flagDataLines = flagChunks.join('\n');
     return `; --------------------------------------------------------------
 ; RetroMap Map Loader
 ; Generated by RetroMapEditor -- AmiBlitz3 source
 ; --------------------------------------------------------------
 
-; -- Map data -------------------------------------------------
 Dim tilemap.w(${mapW * mapH})
 Dim tileFlags.w(${maxTiles})
 
-; -- Tile flag bit definitions ---------------------------------
 ${bitComments}
 
-; -- Init -----------------------------------------------------
-BitMap 0, ${sheetW}, ${sheetH}, 2                  ; tilesheet bitmap
-BitMap 1, 320, 256, 2                              ; screen bitmap
+BitMap 0, ${sheetW}, ${sheetH}, 2
+BitMap 1, 320, 256, 2
 LoadBitMap 0, "tiles.iff", 0
 Use BitMap 0
 BLITZ
 Slice 0,44,2
 
-; -- Load map data from embedded Data statements ----------------
 Restore MapData
 For i = 0 To ${mapW * mapH - 1}
   Read tmp.w
@@ -1238,7 +1045,6 @@ For i = 0 To ${maxTiles - 1}
   tileFlags(i) = tmp
 Next i
 
-; -- Render map ------------------------------------------------
 Use Palette 0
 Show 1
 
@@ -1254,7 +1060,6 @@ For y = 0 To ${mapH - 1}
     srcY  = srcY * ${tileSize}
     dstX  = x * ${tileSize}
     dstY  = y * ${tileSize}
-
     Use BitMap 0
     GetaShape 0, srcX, srcY, ${tileSize}, ${tileSize}
     Use BitMap 1
@@ -1262,67 +1067,46 @@ For y = 0 To ${mapH - 1}
   Next x
 Next y
 
-; -- Main loop -------------------------------------------------
 While Joyb(0) = 0
   VWait
 Wend
 
 End
 
-; -- Embedded map data -----------------------------------------
 .MapData:
 ${gridDataLines.join('\n')}
 
 .FlagData:
-${flagDataLines}
+${flagChunks.join('\n')}
 `;
 }
-/**
- * Convert a JS string to Amiga‑compatible raw bytes.
- *
- * AmiBlitz3 expects LF (0x0A) line endings — NOT CR.
- * CR (0x0D) characters cause "garbage" errors.
- *
- * Encoding: Latin‑1 (ISO‑8859‑1), one byte per code unit masked to 0–255.
- * The generated source is pure 7‑bit ASCII so UTF‑8 and Latin‑1 are
- * byte‑identical for all characters used.
- */
 function stringToAmigaBytes(str) {
-    // Normalise any CRLF or bare CR to LF
     const clean = str.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    // Encode as Latin‑1 — one byte per code unit
     const buf = new Uint8Array(clean.length);
-    for (let i = 0; i < clean.length; i++) {
+    for (let i = 0; i < clean.length; i++)
         buf[i] = clean.charCodeAt(i) & 0xFF;
-    }
     return buf;
 }
-// ─── Amiga export preview & export ────────────────────────────
+// ─── Amiga export preview & export ────────────────────────────────────────────
 let cachedPreviewIff = null;
 let cachedPreviewMapBin = null;
 let cachedPreviewAb3Bytes = null;
 let hasExportData = false;
-const previewBtn = document.getElementById('menu-preview');
+const previewBtn = document.getElementById('tab-level-editor');
 function setPreviewEnabled(enabled) {
     hasExportData = enabled;
-    previewBtn.disabled = !enabled;
 }
 function showAmigaPreview() {
     if (!projectLoaded || !tilesheet || !currentProjectPath) {
         showToast('No project loaded', 'error');
         return;
     }
-    // Generate all data
     cachedPreviewIff = buildIffTilesheet();
     cachedPreviewMapBin = buildMapBinary();
     const ab3raw = buildAmiBlitz3Loader();
     cachedPreviewAb3Bytes = stringToAmigaBytes(ab3raw);
-    // File info
-    document.getElementById('iff-info').textContent =
-        `${CONFIG.sheetW}×${CONFIG.sheetH} px, ${formatSize(cachedPreviewIff.length)}`;
-    document.getElementById('map-info').textContent =
-        `${CONFIG.mapCols}×${CONFIG.mapRows} tiles, ${formatSize(cachedPreviewMapBin.length)}`;
-    // ── IFF preview: draw the tilesheet onto a small canvas (for hover popup) ──
+    document.getElementById('iff-info').textContent = `${CONFIG.sheetW}×${CONFIG.sheetH} px, ${formatSize(cachedPreviewIff.length)}`;
+    document.getElementById('map-info').textContent = `${CONFIG.mapCols}×${CONFIG.mapRows} tiles, ${formatSize(cachedPreviewMapBin.length)}`;
     const iffCanvas = document.getElementById('iff-preview-canvas');
     const maxDim = 240;
     const scale = Math.min(maxDim / CONFIG.sheetW, maxDim / CONFIG.sheetH, 1);
@@ -1331,42 +1115,10 @@ function showAmigaPreview() {
     const iffCtx = iffCanvas.getContext('2d');
     iffCtx.imageSmoothingEnabled = false;
     iffCtx.drawImage(tilesheet, 0, 0, iffCanvas.width, iffCanvas.height);
-    // AB3 source code
-    const ab3Src = buildAmiBlitz3Loader();
-    document.getElementById('ab3-preview').value = ab3Src;
+    document.getElementById('ab3-preview').value = buildAmiBlitz3Loader();
     document.getElementById('amiga-preview-overlay').classList.remove('hidden');
 }
-function formatHexDump(data, maxBytes) {
-    const len = Math.min(data.length, maxBytes);
-    const lines = [];
-    for (let offset = 0; offset < len; offset += 16) {
-        const addr = offset.toString(16).padStart(8, '0');
-        const bytes = [];
-        const ascii = [];
-        for (let i = 0; i < 16; i++) {
-            if (offset + i < len) {
-                const b = data[offset + i];
-                bytes.push(b.toString(16).padStart(2, '0'));
-                ascii.push(b >= 32 && b <= 126 ? String.fromCharCode(b) : '.');
-            }
-            else {
-                bytes.push('  ');
-                ascii.push(' ');
-            }
-        }
-        lines.push(`${addr}  ${bytes.slice(0, 8).join(' ')}  ${bytes.slice(8).join(' ')}  |${ascii.join('')}|`);
-    }
-    if (data.length > maxBytes) {
-        lines.push(`... (${data.length - maxBytes} more bytes)`);
-    }
-    return lines.join('\n');
-}
-function formatSize(bytes) {
-    if (bytes < 1024)
-        return bytes + ' B';
-    const kb = bytes / 1024;
-    return kb.toFixed(1) + ' KB';
-}
+function formatSize(bytes) { return bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB'; }
 async function doExportAmiga() {
     if (!cachedPreviewIff || !cachedPreviewMapBin || !cachedPreviewAb3Bytes) {
         showToast('Nothing to export', 'error');
@@ -1383,47 +1135,18 @@ async function doExportAmiga() {
         showToast('Exported to amiga', 'success');
         document.getElementById('amiga-preview-overlay').classList.add('hidden');
     }
-    else {
+    else
         showToast('Export failed', 'error');
-    }
 }
-document.getElementById('menu-export').addEventListener('click', () => {
-    showAmigaPreview();
-});
-document.getElementById('menu-preview').addEventListener('click', () => {
-    if (!hasExportData)
-        return;
-    showAmigaPreview();
-});
-document.getElementById('btn-preview-cancel').addEventListener('click', () => {
-    document.getElementById('amiga-preview-overlay').classList.add('hidden');
-});
-document.getElementById('btn-preview-export').addEventListener('click', () => {
-    doExportAmiga();
-});
 // ─── Bits-on-map toggle ────────────────────────────────────────────────────
 bitsOnMapCheckbox.addEventListener('change', () => {
     localStorage.setItem('bitsOnMap', bitsOnMapCheckbox.checked ? '1' : '0');
     drawMap();
 });
-// ─── Menu & Modal event handlers ──────────────────────────────────────────
+// ─── Modal event handlers ──────────────────────────────────────────────────
 let pickedPngDataUrl = null;
 let pickedPngFileName = '';
 let pickedFolderPath = null;
-document.getElementById('menu-new').addEventListener('click', () => {
-    // Reset picker state
-    pickedPngDataUrl = null;
-    pickedPngFileName = '';
-    pickedFolderPath = null;
-    document.getElementById('png-file-name').textContent = 'no file selected';
-    document.getElementById('folder-path').textContent = 'no folder selected';
-    document.getElementById('input-project-name').value = 'MyProject';
-    document.getElementById('input-sheet-cols').value = '20';
-    document.getElementById('input-sheet-rows').value = '20';
-    document.getElementById('input-map-cols').value = '20';
-    document.getElementById('input-map-rows').value = '16';
-    document.getElementById('new-project-overlay').classList.remove('hidden');
-});
 document.getElementById('btn-pick-folder').addEventListener('click', async () => {
     const saved = localStorage.getItem('lastProjectFolder') || undefined;
     const folder = await editorApi.pickFolder(saved);
@@ -1440,32 +1163,19 @@ document.getElementById('btn-pick-png').addEventListener('click', async () => {
         document.getElementById('png-file-name').textContent = result.fileName;
     }
 });
-document.getElementById('btn-modal-cancel').addEventListener('click', () => {
-    document.getElementById('new-project-overlay').classList.add('hidden');
-});
-document.getElementById('btn-rename-cancel').addEventListener('click', () => {
-    renameMapIndex = -1;
-    document.getElementById('rename-map-overlay').classList.add('hidden');
-});
-document.getElementById('btn-rename-confirm').addEventListener('click', () => {
-    finishRenameMap();
-});
+document.getElementById('btn-modal-cancel').addEventListener('click', () => document.getElementById('new-project-overlay').classList.add('hidden'));
+document.getElementById('btn-rename-cancel').addEventListener('click', () => { renameMapIndex = -1; document.getElementById('rename-map-overlay').classList.add('hidden'); });
+document.getElementById('btn-rename-confirm').addEventListener('click', () => finishRenameMap());
 document.getElementById('input-rename-map').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter')
         finishRenameMap();
-    }
     else if (e.key === 'Escape') {
         renameMapIndex = -1;
         document.getElementById('rename-map-overlay').classList.add('hidden');
     }
 });
-document.getElementById('btn-delete-cancel').addEventListener('click', () => {
-    deleteMapIndex = -1;
-    document.getElementById('delete-map-overlay').classList.add('hidden');
-});
-document.getElementById('btn-delete-confirm').addEventListener('click', () => {
-    confirmDeleteMap();
-});
+document.getElementById('btn-delete-cancel').addEventListener('click', () => { deleteMapIndex = -1; document.getElementById('delete-map-overlay').classList.add('hidden'); });
+document.getElementById('btn-delete-confirm').addEventListener('click', () => confirmDeleteMap());
 document.getElementById('btn-modal-create').addEventListener('click', async () => {
     if (!pickedPngDataUrl) {
         const btn = document.getElementById('btn-pick-png');
@@ -1490,10 +1200,7 @@ document.getElementById('btn-modal-create').addEventListener('click', async () =
     document.getElementById('new-project-overlay').classList.add('hidden');
     await createNewProject(projectName, pickedFolderPath, pickedPngDataUrl, pickedPngFileName, sheetCols, sheetRows, mapCols, mapRows, firstMapName);
 });
-document.getElementById('menu-save').addEventListener('click', () => {
-    saveProject();
-});
-// ─── Rename project ────────────────────────────────────────
+// ─── Rename project ────────────────────────────────────────────────────────
 const projectNameSpan = document.getElementById('project-name');
 const projectNameInput = document.getElementById('project-name-input');
 projectNameSpan.addEventListener('click', () => {
@@ -1516,7 +1223,6 @@ function finishRename() {
     projectNameInput.classList.add('hidden');
     projectNameSpan.classList.remove('hidden');
     updateProjectUI();
-    // Auto-save after rename
     saveProject();
 }
 projectNameInput.addEventListener('blur', finishRename);
@@ -1528,7 +1234,7 @@ projectNameInput.addEventListener('keydown', (e) => {
         projectNameSpan.classList.remove('hidden');
     }
 });
-// ─── Custom file browser ────────────────────────────────────
+// ─── Custom file browser ──────────────────────────────────────────────────
 let fbCurrentPath = '';
 let fbSelectedPath = '';
 async function fbNavigate(dirPath) {
@@ -1542,40 +1248,31 @@ async function fbNavigate(dirPath) {
     }
     document.getElementById('fb-current-path').textContent = dirPath;
     let html = '';
-    // Parent folder (..)
     if (dirPath !== '/') {
         const parent = dirPath.substring(0, dirPath.lastIndexOf('/')) || '/';
         html += `<button class="fb-item up" data-path="${parent}"><span class="fb-item-name">..</span></button>`;
     }
-    // Folders (skip hidden)
     const visibleFolders = listing.folders.filter(f => !f.startsWith('.'));
-    for (const f of visibleFolders) {
+    for (const f of visibleFolders)
         html += `<button class="fb-item folder" data-path="${dirPath}/${f}"><span class="fb-item-name">${f}</span></button>`;
-    }
-    // All non-hidden files — .project files are clickable, others are disabled
     const visibleFiles = listing.files.filter(f => !f.startsWith('.'));
     for (const f of visibleFiles) {
         const isProj = f.endsWith('.project');
         html += `<button class="fb-item file${isProj ? '' : ' disabled'}" data-path="${dirPath}/${f}"${isProj ? '' : ' disabled'}><span class="fb-item-name">${f}</span></button>`;
     }
     document.getElementById('fb-list').innerHTML = html;
-    // Bind click events
     document.querySelectorAll('#fb-list .fb-item').forEach(el => {
         el.addEventListener('click', async () => {
             const path = el.dataset.path;
-            if (el.classList.contains('folder') || el.classList.contains('up')) {
-                // Navigate into folder
+            if (el.classList.contains('folder') || el.classList.contains('up'))
                 await fbNavigate(path);
-            }
             else {
-                // Select file
                 document.querySelectorAll('#fb-list .fb-item').forEach(e => e.classList.remove('selected'));
                 el.classList.add('selected');
                 fbSelectedPath = path;
                 document.getElementById('btn-fb-open').removeAttribute('disabled');
             }
         });
-        // Double-click on file = open
         el.addEventListener('dblclick', async () => {
             const path = el.dataset.path;
             if (el.classList.contains('file')) {
@@ -1593,29 +1290,251 @@ async function loadProjectFromPath(filePath) {
     }
     await applyLoadedProject(result);
 }
-document.getElementById('menu-load').addEventListener('click', async () => {
-    const saved = localStorage.getItem('lastProjectFolder') || (await editorApi.pickFolder());
-    if (!saved)
-        return;
-    document.getElementById('file-browser-overlay').classList.remove('hidden');
-    await fbNavigate(saved);
-});
-document.getElementById('btn-fb-cancel').addEventListener('click', () => {
-    document.getElementById('file-browser-overlay').classList.add('hidden');
-});
+document.getElementById('btn-fb-cancel').addEventListener('click', () => document.getElementById('file-browser-overlay').classList.add('hidden'));
 document.getElementById('btn-fb-open').addEventListener('click', async () => {
     if (!fbSelectedPath)
         return;
     document.getElementById('file-browser-overlay').classList.add('hidden');
     await loadProjectFromPath(fbSelectedPath);
 });
+document.getElementById('btn-preview-cancel').addEventListener('click', () => document.getElementById('amiga-preview-overlay').classList.add('hidden'));
+document.getElementById('btn-preview-export').addEventListener('click', () => doExportAmiga());
+// ─── TAB SWITCHING ────────────────────────────────────────────────────────
+const tabLevelEditor = document.getElementById('tab-level-editor');
+const tabPngIff = document.getElementById('tab-png-iff');
+const contentLevelEditor = document.getElementById('tab-content-level-editor');
+const contentPngIff = document.getElementById('tab-content-png-iff');
+function switchTab(tabName) {
+    if (tabName === 'png-iff') {
+        tabLevelEditor.classList.remove('active');
+        tabPngIff.classList.add('active');
+        contentLevelEditor.classList.remove('active');
+        contentPngIff.classList.add('active');
+    }
+    else {
+        tabLevelEditor.classList.add('active');
+        tabPngIff.classList.remove('active');
+        contentLevelEditor.classList.add('active');
+        contentPngIff.classList.remove('active');
+    }
+}
+tabLevelEditor.addEventListener('click', () => switchTab('level-editor'));
+tabPngIff.addEventListener('click', () => switchTab('png-iff'));
+// ─── NATIVE MENU ACTION HANDLER ────────────────────────────────────────────
+editorApi.onMenuAction((action) => {
+    switch (action) {
+        case 'new':
+            // Show new project modal on level editor tab
+            switchTab('level-editor');
+            pickedPngDataUrl = null;
+            pickedPngFileName = '';
+            pickedFolderPath = null;
+            document.getElementById('png-file-name').textContent = 'no file selected';
+            document.getElementById('folder-path').textContent = 'no folder selected';
+            document.getElementById('input-project-name').value = 'MyProject';
+            document.getElementById('input-sheet-cols').value = '20';
+            document.getElementById('input-sheet-rows').value = '20';
+            document.getElementById('input-map-cols').value = '20';
+            document.getElementById('input-map-rows').value = '16';
+            document.getElementById('new-project-overlay').classList.remove('hidden');
+            break;
+        case 'load':
+            switchTab('level-editor');
+            showLoadProjectBrowser();
+            break;
+        case 'save':
+            switchTab('level-editor');
+            saveProject();
+            break;
+        case 'export':
+            switchTab('level-editor');
+            showAmigaPreview();
+            break;
+        case 'preview':
+            switchTab('level-editor');
+            if (hasExportData)
+                showAmigaPreview();
+            else
+                showToast('No export data yet. Export first.', 'error');
+            break;
+        case 'tab-level-editor':
+            switchTab('level-editor');
+            break;
+        case 'tab-png-iff':
+            switchTab('png-iff');
+            break;
+    }
+});
+async function showLoadProjectBrowser() {
+    const saved = localStorage.getItem('lastProjectFolder') || (await editorApi.pickFolder());
+    if (!saved)
+        return;
+    document.getElementById('file-browser-overlay').classList.remove('hidden');
+    await fbNavigate(saved);
+}
+// ─── PNG → IFF CONVERTER ───────────────────────────────────────────────────
+let convPngDataUrl = null;
+let convPngFileName = '';
+let convIffBytes = null;
+const btnPickPngConv = document.getElementById('btn-pick-png-conv');
+const pngFileNameConv = document.getElementById('png-file-name-conv');
+const convPngCanvas = document.getElementById('conv-png-canvas');
+const convIffCanvas = document.getElementById('conv-iff-canvas');
+const convPreviewRow = document.getElementById('conv-png-preview-row');
+const convFileInfo = document.getElementById('conv-file-info');
+const convPngDim = document.getElementById('conv-png-dim');
+const convIffSize = document.getElementById('conv-iff-size');
+const btnConvertIff = document.getElementById('btn-convert-iff');
+btnPickPngConv.addEventListener('click', async () => {
+    const result = await editorApi.pickPng();
+    if (!result)
+        return;
+    convPngDataUrl = result.dataUrl;
+    convPngFileName = result.fileName;
+    pngFileNameConv.textContent = result.fileName;
+    // Load and display PNG preview
+    const img = new Image();
+    img.onload = () => {
+        convPngCanvas.width = img.width;
+        convPngCanvas.height = img.height;
+        const ctx = convPngCanvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0);
+        convPngDim.textContent = `${img.width}×${img.height} px`;
+        // Convert to IFF
+        convIffBytes = pngToIff(img);
+        // Draw IFF preview
+        const w = img.width;
+        const h = img.height;
+        convIffCanvas.width = w;
+        convIffCanvas.height = h;
+        const iffCtx = convIffCanvas.getContext('2d');
+        iffCtx.imageSmoothingEnabled = false;
+        const imageData = iffCtx.createImageData(w, h);
+        const bytesPerRow = ((w + 15) >> 4) << 1;
+        // Skip to BODY chunk: FORM(12) + BMHD(8+20=28) + CMAP(8+6=14) = 54 bytes, then BODY header (8) = 62
+        let bodyOffset = 12; // skip FORM header
+        // Read FORM size
+        const formSize = (convIffBytes[4] << 24) | (convIffBytes[5] << 16) | (convIffBytes[6] << 8) | convIffBytes[7];
+        // Skip "ILBM" (4 bytes after FORM header)
+        let pos = 12; // after "ILBM"
+        while (pos < convIffBytes.length) {
+            const chunkType = String.fromCharCode(convIffBytes[pos], convIffBytes[pos + 1], convIffBytes[pos + 2], convIffBytes[pos + 3]);
+            const chunkLen = (convIffBytes[pos + 4] << 24) | (convIffBytes[pos + 5] << 16) | (convIffBytes[pos + 6] << 8) | convIffBytes[pos + 7];
+            if (chunkType === 'BODY') {
+                bodyOffset = pos + 8;
+                break;
+            }
+            pos += 8 + chunkLen;
+            if (chunkLen % 2 !== 0)
+                pos += 1; // IFF padding
+        }
+        for (let y = 0; y < h; y++) {
+            const rowOff = bodyOffset + y * bytesPerRow;
+            for (let x = 0; x < w; x++) {
+                const byteIdx = rowOff + (x >> 3);
+                const bitIdx = 7 - (x & 7);
+                const isWhite = (convIffBytes[byteIdx] & (1 << bitIdx)) !== 0;
+                const pxOff = (y * w + x) * 4;
+                imageData.data[pxOff] = isWhite ? 255 : 0;
+                imageData.data[pxOff + 1] = isWhite ? 255 : 0;
+                imageData.data[pxOff + 2] = isWhite ? 255 : 0;
+                imageData.data[pxOff + 3] = 255;
+            }
+        }
+        iffCtx.putImageData(imageData, 0, 0);
+        convIffSize.textContent = formatSize(convIffBytes.length);
+        convPreviewRow.style.display = 'flex';
+        convFileInfo.style.display = 'flex';
+        btnConvertIff.disabled = false;
+    };
+    img.src = result.dataUrl;
+});
+/**
+ * Convert an HTMLImageElement to a 1-bitplane IFF/ILBM Uint8Array.
+ * Uses the same algorithm as the Python converter.
+ */
+function pngToIff(img) {
+    const w = img.width;
+    const h = img.height;
+    const bytesPerRow = ((w + 15) >> 4) << 1;
+    // Render to temp canvas to read pixels
+    const tmp = document.createElement('canvas');
+    tmp.width = w;
+    tmp.height = h;
+    const ctx = tmp.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const pixels = imageData.data;
+    // Build BODY
+    const body = new Uint8Array(h * bytesPerRow);
+    for (let y = 0; y < h; y++) {
+        const rowOff = y * bytesPerRow;
+        for (let x = 0; x < w; x++) {
+            const pxOff = (y * w + x) * 4;
+            const r = pixels[pxOff];
+            const g = pixels[pxOff + 1];
+            const b = pixels[pxOff + 2];
+            // Any non-black pixel → set in monochrome
+            if (r > 127 || g > 127 || b > 127) {
+                const byteIdx = x >> 3;
+                const bitIdx = 7 - (x & 7);
+                body[rowOff + byteIdx] |= (1 << bitIdx);
+            }
+        }
+    }
+    function iffChunk(type, data) {
+        const out = new Uint8Array(8 + data.length);
+        for (let i = 0; i < 4; i++)
+            out[i] = type.charCodeAt(i);
+        putU32BE(out, 4, data.length);
+        out.set(data, 8);
+        return out;
+    }
+    const bmhd = new Uint8Array(20);
+    putU16BE(bmhd, 0, w);
+    putU16BE(bmhd, 2, h);
+    bmhd[8] = 1; // nPlanes
+    bmhd[14] = 44;
+    bmhd[15] = 52; // aspect
+    putU16BE(bmhd, 16, w);
+    putU16BE(bmhd, 18, h);
+    const cmap = new Uint8Array([0, 0, 0, 255, 255, 255]);
+    const bmhdChunk = iffChunk('BMHD', bmhd);
+    const cmapChunk = iffChunk('CMAP', cmap);
+    const bodyChunk = iffChunk('BODY', body);
+    const ilbmInner = new Uint8Array(4 + bmhdChunk.length + cmapChunk.length + bodyChunk.length);
+    let p = 0;
+    ilbmInner.set([0x49, 0x4C, 0x42, 0x4D], p);
+    p += 4;
+    ilbmInner.set(bmhdChunk, p);
+    p += bmhdChunk.length;
+    ilbmInner.set(cmapChunk, p);
+    p += cmapChunk.length;
+    ilbmInner.set(bodyChunk, p);
+    const form = new Uint8Array(8 + ilbmInner.length);
+    form.set([0x46, 0x4F, 0x52, 0x4D], 0);
+    putU32BE(form, 4, ilbmInner.length);
+    form.set(ilbmInner, 8);
+    return form;
+}
+btnConvertIff.addEventListener('click', async () => {
+    if (!convIffBytes)
+        return;
+    const defaultName = convPngFileName.replace(/\.png$/i, '.iff');
+    const filePath = await editorApi.saveIffDialog(defaultName);
+    if (!filePath)
+        return;
+    const success = await editorApi.writeFile(filePath, Array.from(convIffBytes));
+    if (success)
+        showToast('IFF saved: ' + filePath, 'success');
+    else
+        showToast('Failed to save IFF', 'error');
+});
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 async function boot() {
-    // Restore bits-on-map toggle state
-    if (localStorage.getItem('bitsOnMap') === '1') {
+    if (localStorage.getItem('bitsOnMap') === '1')
         bitsOnMapCheckbox.checked = true;
-    }
-    // No auto-loading — start empty
     clearEditor();
     updateProjectUI();
 }

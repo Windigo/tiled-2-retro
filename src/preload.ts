@@ -70,6 +70,11 @@ const api = {
   mapCols: 20,
   mapRows: 16,
 
+  /** Listen for native menu actions. */
+  onMenuAction: (callback: (action: string) => void): void => {
+    ipcRenderer.on('menu-action', (_event, action: string) => callback(action));
+  },
+
   /** Open a file dialog to pick a PNG tilesheet. Returns { dataUrl, fileName } or null. */
   pickPng: (): Promise<{ dataUrl: string; fileName: string } | null> =>
     ipcRenderer.invoke('pick-png'),
@@ -77,6 +82,14 @@ const api = {
   /** Open a folder dialog to pick where to create the project. Returns path or null. */
   pickFolder: (defaultPath?: string): Promise<string | null> =>
     ipcRenderer.invoke('pick-folder', defaultPath),
+
+  /** Open a save-file dialog for IFF export. Returns path or null. */
+  saveIffDialog: (defaultName?: string): Promise<string | null> =>
+    ipcRenderer.invoke('save-iff-dialog', defaultName),
+
+  /** Write raw byte array to a file. */
+  writeFile: (filePath: string, data: number[]): Promise<boolean> =>
+    ipcRenderer.invoke('write-file', filePath, data),
 
   /** Create a new project: folder + copied PNG + .project file. Returns the project folder path or null. */
   createProject: (data: CreateProjectData): Promise<string | null> =>
@@ -95,7 +108,7 @@ const api = {
     ipcRenderer.invoke('load-png-file', filePath),
 
   /** Export Amiga files (IFF, map.bin, .ab3) to the amiga/ subfolder. */
-  exportAmiga: (data: { projectFolder: string; iffData: number[]; mapBinData: number[]; ab3Bytes: number[] }): Promise<boolean> =>
+  exportAmiga: (data: { projectFolder: string; iffData: number[]; mapBinData: number[]; ab3Source: string }): Promise<boolean> =>
     ipcRenderer.invoke('export-amiga', data),
 
   /** List a directory for the custom file browser. */

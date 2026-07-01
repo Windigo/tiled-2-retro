@@ -12,9 +12,90 @@ body {
   height: 100vh;
 }
 
+/* ---- TOP BAR (TAB SWITCHER) ---- */
+#top-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #0f3460;
+  border-bottom: 1px solid #1a508b;
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+#top-bar .tab-btn {
+  background: transparent;
+  color: #6a7a9a;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  font-family: inherit;
+}
+
+#top-bar .tab-btn:hover {
+  color: #e0e0e0;
+  background: rgba(26, 80, 139, 0.3);
+}
+
+#top-bar .tab-btn.active {
+  color: #e94560;
+  border-bottom-color: #e94560;
+}
+
+#top-bar .project-name {
+  margin-left: auto;
+  margin-right: 12px;
+  font-size: 12px;
+  color: #6a7a9a;
+  font-style: italic;
+}
+
+#top-bar .project-name.clickable {
+  cursor: pointer;
+  border-bottom: 1px dotted transparent;
+  transition: border-color 0.15s;
+}
+
+#top-bar .project-name.clickable:hover {
+  border-bottom-color: #6a7a9a;
+}
+
+#top-bar .project-name-input {
+  margin-left: auto;
+  margin-right: 12px;
+  font-size: 12px;
+  background: #0d1117;
+  border: 1px solid #1a508b;
+  border-radius: 3px;
+  color: #e0e0e0;
+  padding: 2px 6px;
+  font-family: inherit;
+  width: 180px;
+}
+
+#top-bar .project-name-input:focus {
+  outline: none;
+  border-color: #e94560;
+}
+
+/* ---- TAB CONTENT ---- */
+.tab-content {
+  display: none;
+  height: calc(100vh - 40px);
+}
+
+.tab-content.active {
+  display: flex;
+}
+
+/* ---- LAYOUT (LEVEL EDITOR TAB) ---- */
 #app {
   display: flex;
-  height: 100vh;
+  height: 100%;
   padding: 10px;
   gap: 10px;
 }
@@ -200,7 +281,6 @@ body {
   font-style: italic;
 }
 
-/* Special row for unused flags (no name set) */
 .flag-row.unused .flag-bit-num {
   color: #3a4a6a;
 }
@@ -216,78 +296,6 @@ body {
   color: #6a7a9a;
   text-align: center;
   line-height: 1.4;
-}
-
-/* ---- TOP MENU ---- */
-#top-menu {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #0f3460;
-  padding: 6px 12px;
-  border-bottom: 1px solid #1a508b;
-  flex-shrink: 0;
-}
-
-.menu-btn {
-  background: #16213e;
-  color: #e0e0e0;
-  border: 1px solid #1a508b;
-  padding: 5px 14px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: background 0.15s;
-}
-
-.menu-btn:hover {
-  background: #e94560;
-  border-color: #e94560;
-}
-
-.menu-btn:active {
-  background: #c73a50;
-}
-
-.menu-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.project-name {
-  margin-left: auto;
-  font-size: 12px;
-  color: #6a7a9a;
-  font-style: italic;
-}
-
-.project-name.clickable {
-  cursor: pointer;
-  border-bottom: 1px dotted transparent;
-  transition: border-color 0.15s;
-}
-
-.project-name.clickable:hover {
-  border-bottom-color: #6a7a9a;
-}
-
-.project-name-input {
-  margin-left: auto;
-  font-size: 12px;
-  background: #0d1117;
-  border: 1px solid #1a508b;
-  border-radius: 3px;
-  color: #e0e0e0;
-  padding: 2px 6px;
-  font-family: inherit;
-  width: 180px;
-}
-
-.project-name-input:focus {
-  outline: none;
-  border-color: #e94560;
 }
 
 /* ---- MODAL ---- */
@@ -343,7 +351,8 @@ body {
   font-weight: 500;
 }
 
-.form-group input[type="number"] {
+.form-group input[type="number"],
+.form-group input[type="text"] {
   background: #1a1a2e;
   border: 1px solid #0f3460;
   border-radius: 4px;
@@ -353,7 +362,8 @@ body {
   width: 100%;
 }
 
-.form-group input[type="number"]:focus {
+.form-group input[type="number"]:focus,
+.form-group input[type="text"]:focus {
   outline: none;
   border-color: #e94560;
 }
@@ -417,6 +427,12 @@ body {
 
 .btn-primary:hover {
   background: #ff5a7a;
+}
+
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .btn-secondary {
@@ -519,33 +535,6 @@ body {
   background: #000;
   max-width: 100%;
   height: auto;
-}
-
-.preview-tabs {
-  display: flex;
-  gap: 2px;
-}
-
-.tab-btn {
-  background: #0f3460;
-  color: #6a7a9a;
-  border: 1px solid #1a508b;
-  border-bottom: none;
-  border-radius: 4px 4px 0 0;
-  padding: 2px 12px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.tab-btn.active {
-  background: #1a508b;
-  color: #e0e0e0;
-}
-
-.tab-btn:hover {
-  background: #1a508b;
-  color: #e0e0e0;
 }
 
 /* ---- FILE BROWSER ---- */
@@ -683,7 +672,6 @@ body {
   user-select: none;
 }
 
-/* The switch - the box around the slider */
 .switch {
   position: relative;
   display: inline-block;
@@ -692,14 +680,12 @@ body {
   flex-shrink: 0;
 }
 
-/* Hide default HTML checkbox */
 .switch input {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-/* The slider */
 .slider {
   position: absolute;
   cursor: pointer;
@@ -872,6 +858,54 @@ body {
   background: rgba(233, 69, 96, 0.15);
   border-color: #e94560;
   color: #e94560;
+}
+
+/* ---- PNG → IFF CONVERTER PANEL ---- */
+.converter-panel {
+  display: flex;
+  flex-direction: column;
+  background: #16213e;
+  border-radius: 8px;
+  border: 1px solid #0f3460;
+  padding: 24px;
+  margin: 20px auto;
+  max-width: 700px;
+  width: 100%;
+  align-self: flex-start;
+}
+
+.converter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.converter-preview-row {
+  display: flex;
+  gap: 16px;
+}
+
+.converter-preview-row .form-group {
+  flex: 1;
+}
+
+.conv-preview-canvas {
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  image-rendering: pixelated;
+  background: #000;
+  max-width: 100%;
+  height: auto;
+}
+
+.conv-file-info {
+  display: flex;
+  gap: 24px;
+  font-size: 12px;
+  color: #6a7a9a;
+  font-family: 'Consolas', 'Courier New', monospace;
+  padding: 4px 0;
 }
 
 /* ---- SCROLLBAR ---- */

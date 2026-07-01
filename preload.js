@@ -8,10 +8,18 @@ const api = {
     tilesheetRows: 20,
     mapCols: 20,
     mapRows: 16,
+    /** Listen for native menu actions. */
+    onMenuAction: (callback) => {
+        electron_1.ipcRenderer.on('menu-action', (_event, action) => callback(action));
+    },
     /** Open a file dialog to pick a PNG tilesheet. Returns { dataUrl, fileName } or null. */
     pickPng: () => electron_1.ipcRenderer.invoke('pick-png'),
     /** Open a folder dialog to pick where to create the project. Returns path or null. */
     pickFolder: (defaultPath) => electron_1.ipcRenderer.invoke('pick-folder', defaultPath),
+    /** Open a save-file dialog for IFF export. Returns path or null. */
+    saveIffDialog: (defaultName) => electron_1.ipcRenderer.invoke('save-iff-dialog', defaultName),
+    /** Write raw byte array to a file. */
+    writeFile: (filePath, data) => electron_1.ipcRenderer.invoke('write-file', filePath, data),
     /** Create a new project: folder + copied PNG + .project file. Returns the project folder path or null. */
     createProject: (data) => electron_1.ipcRenderer.invoke('create-project', data),
     /** Save the project file at the known folder path. */

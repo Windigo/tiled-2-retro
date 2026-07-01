@@ -1,6 +1,8 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+
+let mainWindow: BrowserWindow | null = null;
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -16,9 +18,76 @@ function createWindow(): void {
     }
   });
 
+  mainWindow = win;
   win.loadFile('index.html');
   win.setMenuBarVisibility(false);
   // win.webContents.openDevTools();
+
+  buildMenu(win);
+}
+
+function buildMenu(win: BrowserWindow): void {
+  const sendAction = (action: string) => {
+    win.webContents.send('menu-action', action);
+  };
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Project',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => sendAction('new')
+        },
+        {
+          label: 'Load Project',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => sendAction('load')
+        },
+        {
+          label: 'Save Project',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => sendAction('save')
+        },
+        { type: 'separator' },
+        {
+          label: 'Export Amiga',
+          accelerator: 'CmdOrCtrl+E',
+          click: () => sendAction('export')
+        },
+        {
+          label: 'Preview Export',
+          accelerator: 'CmdOrCtrl+Shift+E',
+          click: () => sendAction('preview')
+        },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Level Editor',
+          click: () => sendAction('tab-level-editor')
+        },
+        {
+          label: 'PNG → IFF Converter',
+          click: () => sendAction('tab-png-iff')
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle DevTools',
+          accelerator: 'F12',
+          click: () => win.webContents.toggleDevTools()
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 }
 
 // ─── IPC: File dialogs for project workflow ──────────────────────────────────
@@ -62,6 +131,29 @@ ipcMain.handle('pick-folder', async (_event: unknown, defaultPath?: string): Pro
   return result.filePaths[0];
 });
 
+/** Pick a save-file location for IFF export. */
+ipcMain.handle('save-iff-dialog', async (_event: unknown, defaultName?: string): Promise<string | null> => {
+  const result = await dialog.showSaveDialog({
+    title: 'Save IFF File',
+    defaultPath: defaultName || 'output.iff',
+    filters: [{ name: 'IFF/ILBM', extensions: ['iff', 'ilbm'] }]
+  });
+
+  if (result.canceled || !result.filePath) return null;
+  return result.filePath;
+});
+
+/** Write raw bytes to a file (for IFF export). */
+ipcMain.handle('write-file', async (_event: unknown, filePath: string, data: number[]): Promise<boolean> => {
+  try {
+    fs.writeFileSync(filePath, Buffer.from(data));
+    return true;
+  } catch (err) {
+    console.error('Failed to write file:', err);
+    return false;
+  }
+});
+
 /**
  * Create a new project: creates a folder at the given path, copies the PNG
  * tilesheet into it, and writes the .project project file.
@@ -72,7 +164,7 @@ ipcMain.handle('create-project', async (
   data: {
     projectName: string;
     folderPath: string;
-    pngDataUrl: string;       // base64 data URL of the tilesheet
+    pngDataUrl: string;
     pngFileName: string;
     maps: { name: string; map: number[][]; mapCols: number; mapRows: number }[];
     bits: { name: string; color: string }[];
@@ -85,16 +177,13 @@ ipcMain.handle('create-project', async (
     const projectDir = path.join(data.folderPath, data.projectName);
     const amigaDir = path.join(projectDir, 'amiga');
 
-    // Create folders
     fs.mkdirSync(projectDir, { recursive: true });
     fs.mkdirSync(amigaDir, { recursive: true });
 
-    // Write tilesheet PNG (extract base64 from data URL)
     const base64Data = data.pngDataUrl.replace(/^data:image\/png;base64,/, '');
     const pngBuffer = Buffer.from(base64Data, 'base64');
     fs.writeFileSync(path.join(projectDir, data.pngFileName), pngBuffer);
 
-    // Write project file (without the tilesheet DataUrl to keep it small)
     const { pngDataUrl, ...projectData } = data;
     const projectJson = JSON.stringify(projectData, null, 2);
     fs.writeFileSync(path.join(projectDir, `${data.projectName}.project`), projectJson, 'utf-8');
@@ -137,9 +226,9 @@ ipcMain.handle('export-amiga', async (
   _event: unknown,
   data: {
     projectFolder: string;
-    iffData: number[];        // Uint8Array as a regular number array
-    mapBinData: number[];     // Uint8Array as a regular number array
-    ab3Source: string;        // Raw AmiBlitz3 source code (plain text)
+    iffData: number[];
+    mapBinData: number[];
+    ab3Source: string;
   }
 ): Promise<boolean> => {
   try {
@@ -149,8 +238,6 @@ ipcMain.handle('export-amiga', async (
     fs.writeFileSync(path.join(amigaDir, 'tiles.iff'), Buffer.from(data.iffData));
     fs.writeFileSync(path.join(amigaDir, 'map.bin'), Buffer.from(data.mapBinData));
 
-    // Write AB3 source — AmiBlitz3 uses LF (0x0A) line endings on AmigaOS.
-    // The .ab3 extension tells the IDE to treat it as AmiBlitz3 source.
     const clean = data.ab3Source.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     const buf = Buffer.alloc(clean.length);
     for (let i = 0; i < clean.length; i++) buf[i] = clean.charCodeAt(i) & 0xFF;

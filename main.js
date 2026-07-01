@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
+let mainWindow = null;
 function createWindow() {
     const win = new electron_1.BrowserWindow({
         width: 1100,
@@ -49,9 +50,72 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         }
     });
+    mainWindow = win;
     win.loadFile('index.html');
     win.setMenuBarVisibility(false);
     // win.webContents.openDevTools();
+    buildMenu(win);
+}
+function buildMenu(win) {
+    const sendAction = (action) => {
+        win.webContents.send('menu-action', action);
+    };
+    const template = [
+        {
+            label: 'File',
+            submenu: [
+                {
+                    label: 'New Project',
+                    accelerator: 'CmdOrCtrl+N',
+                    click: () => sendAction('new')
+                },
+                {
+                    label: 'Load Project',
+                    accelerator: 'CmdOrCtrl+O',
+                    click: () => sendAction('load')
+                },
+                {
+                    label: 'Save Project',
+                    accelerator: 'CmdOrCtrl+S',
+                    click: () => sendAction('save')
+                },
+                { type: 'separator' },
+                {
+                    label: 'Export Amiga',
+                    accelerator: 'CmdOrCtrl+E',
+                    click: () => sendAction('export')
+                },
+                {
+                    label: 'Preview Export',
+                    accelerator: 'CmdOrCtrl+Shift+E',
+                    click: () => sendAction('preview')
+                },
+                { type: 'separator' },
+                { role: 'quit' }
+            ]
+        },
+        {
+            label: 'View',
+            submenu: [
+                {
+                    label: 'Level Editor',
+                    click: () => sendAction('tab-level-editor')
+                },
+                {
+                    label: 'PNG → IFF Converter',
+                    click: () => sendAction('tab-png-iff')
+                },
+                { type: 'separator' },
+                {
+                    label: 'Toggle DevTools',
+                    accelerator: 'F12',
+                    click: () => win.webContents.toggleDevTools()
+                }
+            ]
+        }
+    ];
+    const menu = electron_1.Menu.buildFromTemplate(template);
+    electron_1.Menu.setApplicationMenu(menu);
 }
 // ─── IPC: File dialogs for project workflow ──────────────────────────────────
 /** Pick a PNG tilesheet file; returns { dataUrl, fileName } or null. */
@@ -92,6 +156,28 @@ electron_1.ipcMain.handle('pick-folder', async (_event, defaultPath) => {
         return null;
     return result.filePaths[0];
 });
+/** Pick a save-file location for IFF export. */
+electron_1.ipcMain.handle('save-iff-dialog', async (_event, defaultName) => {
+    const result = await electron_1.dialog.showSaveDialog({
+        title: 'Save IFF File',
+        defaultPath: defaultName || 'output.iff',
+        filters: [{ name: 'IFF/ILBM', extensions: ['iff', 'ilbm'] }]
+    });
+    if (result.canceled || !result.filePath)
+        return null;
+    return result.filePath;
+});
+/** Write raw bytes to a file (for IFF export). */
+electron_1.ipcMain.handle('write-file', async (_event, filePath, data) => {
+    try {
+        fs.writeFileSync(filePath, Buffer.from(data));
+        return true;
+    }
+    catch (err) {
+        console.error('Failed to write file:', err);
+        return false;
+    }
+});
 /**
  * Create a new project: creates a folder at the given path, copies the PNG
  * tilesheet into it, and writes the .project project file.
@@ -101,14 +187,11 @@ electron_1.ipcMain.handle('create-project', async (_event, data) => {
     try {
         const projectDir = path.join(data.folderPath, data.projectName);
         const amigaDir = path.join(projectDir, 'amiga');
-        // Create folders
         fs.mkdirSync(projectDir, { recursive: true });
         fs.mkdirSync(amigaDir, { recursive: true });
-        // Write tilesheet PNG (extract base64 from data URL)
         const base64Data = data.pngDataUrl.replace(/^data:image\/png;base64,/, '');
         const pngBuffer = Buffer.from(base64Data, 'base64');
         fs.writeFileSync(path.join(projectDir, data.pngFileName), pngBuffer);
-        // Write project file (without the tilesheet DataUrl to keep it small)
         const { pngDataUrl, ...projectData } = data;
         const projectJson = JSON.stringify(projectData, null, 2);
         fs.writeFileSync(path.join(projectDir, `${data.projectName}.project`), projectJson, 'utf-8');
@@ -140,8 +223,6 @@ electron_1.ipcMain.handle('export-amiga', async (_event, data) => {
         fs.mkdirSync(amigaDir, { recursive: true });
         fs.writeFileSync(path.join(amigaDir, 'tiles.iff'), Buffer.from(data.iffData));
         fs.writeFileSync(path.join(amigaDir, 'map.bin'), Buffer.from(data.mapBinData));
-        // Write AB3 source — AmiBlitz3 uses LF (0x0A) line endings on AmigaOS.
-        // The .ab3 extension tells the IDE to treat it as AmiBlitz3 source.
         const clean = data.ab3Source.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         const buf = Buffer.alloc(clean.length);
         for (let i = 0; i < clean.length; i++)
