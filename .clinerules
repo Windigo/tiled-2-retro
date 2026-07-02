@@ -7,3 +7,34 @@
   als referentie.
 - Begin altijd met `blitzbasic_manuals/Guide_To_Blitz_Basic.md`.
 - Raadpleeg indien nodig aanvullende markdown-bestanden in dezelfde map voor extra context.
+
+## AmiBlitz3 / Amiga code-generatie
+
+Bij het genereren van AmiBlitz3-broncode (`.ab3`) of andere Amiga-tekstbestanden:
+
+### Regeleindes
+- Gebruik uitsluitend LF (`\n`, 0x0A) — AmigaDOS-conventie (Unix-stijl).
+- Géén CRLF (`\r\n`) en géén losse CR (`\r`); die geven een zichtbare `^M`
+  en kunnen de AmiBlitz3-parser laten struikelen.
+- Normaliseer altijd: `.replace(/\r\n/g, '\n').replace(/\r/g, '\n')`.
+- Zorg dat `.gitattributes`/editor het `.ab3`-bestand niet terug naar CRLF zet
+  (bijv. `*.ab3 -text` of als binary markeren).
+
+### Karakters / encoding
+- De Amiga gebruikt ISO 8859-1 (Latin-1), een 8-bits tekenset — GEEN UTF-8.
+- Bytes worden geschreven als `charCodeAt(i) & 0xFF`; alles boven U+00FF wordt
+  afgekapt en raakt corrupt.
+- Vermijd/filter niet-ASCII, met name in gebruikersinvoer (zoals flag-namen die
+  in comments belanden). Valkuilen: em-dash `—`, en-dash `–`, slimme quotes
+  `“ ” ‘ ’`, ellipsis `…`, non-breaking space, box-drawing tekens.
+- Het veiligst: puur ASCII (0x20–0x7E) plus LF. Overweeg een sanitizer die
+  niet-ASCII weglaat of transliterateert.
+- Spaties voor inspringen (geen tabs). Commentaar met `;` (Blitz/AmiBlitz-stijl).
+
+### .ab3-bestanden
+- `.ab3` = AmiBlitz3-bron (opvolger van Blitz Basic 2 `.bb`; AmiBlitz2 = `.ab2`).
+- De AmiBlitz3-IDE slaat projecten intern/getokeniseerd op. Gegenereerde `.ab3`
+  is platte ASCII-source en moet mogelijk via "Load ASCII"/import geladen worden,
+  niet als getokeniseerd project geopend.
+- Bestandsnamen (AmigaDOS): kort houden, gereserveerde tekens `:` en `/` vermijden,
+  en op oude OFS/FFS-volumes namen > ~30 tekens vermijden.
