@@ -102,7 +102,7 @@ declare const editorApi: {
     projectFolder: string;
     iffData: number[];
     mapBinData: number[];
-    ab3Source: string;
+    ab3Data: number[];
   }) => Promise<boolean>;
   listDirectory: (dirPath: string) => Promise<{ path: string; folders: string[]; files: string[] } | null>;
   loadProjectFile: (filePath: string) => Promise<{
@@ -1284,9 +1284,17 @@ ${flagChunks.join('\n')}
 }
 
 function stringToAmigaBytes(str: string): Uint8Array {
+  // Normalize to AmigaDOS LF line endings and strip anything the Amiga
+  // (ISO 8859-1 / plain ASCII source) cannot represent. Non-printable and
+  // non-ASCII characters are replaced with '?' so generated .ab3 sources stay clean.
   const clean = str.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const buf = new Uint8Array(clean.length);
-  for (let i = 0; i < clean.length; i++) buf[i] = clean.charCodeAt(i) & 0xFF;
+  for (let i = 0; i < clean.length; i++) {
+    const code = clean.charCodeAt(i);
+    if (code === 0x0A) buf[i] = 0x0A;                    // keep LF line endings
+    else if (code >= 0x20 && code <= 0x7E) buf[i] = code; // printable ASCII
+    else buf[i] = 0x3F;                                   // '?' for control / non-ASCII
+  }
   return buf;
 }
 
@@ -1335,7 +1343,7 @@ async function doExportAmiga(): Promise<void> {
     projectFolder: currentProjectPath,
     iffData: Array.from(cachedPreviewIff),
     mapBinData: Array.from(cachedPreviewMapBin),
-    ab3Source: buildAmiBlitz3Loader()
+    ab3Data: Array.from(cachedPreviewAb3Bytes)
   });
   if (success) { setPreviewEnabled(true); showToast('Exported to amiga', 'success'); document.getElementById('amiga-preview-overlay')!.classList.add('hidden'); }
   else showToast('Export failed', 'error');

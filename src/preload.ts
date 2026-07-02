@@ -113,7 +113,7 @@ const api = {
     ipcRenderer.invoke('load-png-file', filePath),
 
   /** Export Amiga files (IFF, map.bin, .ab3) to the amiga/ subfolder. */
-  exportAmiga: (data: { projectFolder: string; iffData: number[]; mapBinData: number[]; ab3Source: string }): Promise<boolean> =>
+  exportAmiga: (data: { projectFolder: string; iffData: number[]; mapBinData: number[]; ab3Data: number[] }): Promise<boolean> =>
     ipcRenderer.invoke('export-amiga', data),
 
   /** List a directory for the custom file browser. */

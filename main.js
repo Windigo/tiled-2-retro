@@ -68,10 +68,8 @@ electron_1.ipcMain.handle('pick-png', async () => {
     try {
         const buffer = fs.readFileSync(filePath);
         const base64 = buffer.toString('base64');
-        const ext = path.extname(filePath).toLowerCase();
-        const mime = ext === '.png' ? 'image/png' : 'image/png';
         return {
-            dataUrl: `data:${mime};base64,${base64}`,
+            dataUrl: `data:image/png;base64,${base64}`,
             fileName: path.basename(filePath)
         };
     }
@@ -158,18 +156,15 @@ electron_1.ipcMain.handle('save-project-file', async (_event, data) => {
         return false;
     }
 });
-/** Export Amiga files (tiles.iff, map.bin, LoadMap.bb) to the project's amiga/ subfolder. */
+/** Export Amiga files (tiles.iff, map.bin, LoadMap.ab3) to the project's amiga/ subfolder. */
 electron_1.ipcMain.handle('export-amiga', async (_event, data) => {
     try {
         const amigaDir = path.join(data.projectFolder, 'amiga');
         fs.mkdirSync(amigaDir, { recursive: true });
+        // ab3Data is already normalized to LF line endings and ASCII-sanitized in the renderer.
         fs.writeFileSync(path.join(amigaDir, 'tiles.iff'), Buffer.from(data.iffData));
         fs.writeFileSync(path.join(amigaDir, 'map.bin'), Buffer.from(data.mapBinData));
-        const clean = data.ab3Source.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-        const buf = Buffer.alloc(clean.length);
-        for (let i = 0; i < clean.length; i++)
-            buf[i] = clean.charCodeAt(i) & 0xFF;
-        fs.writeFileSync(path.join(amigaDir, 'LoadMap.ab3'), buf);
+        fs.writeFileSync(path.join(amigaDir, 'LoadMap.ab3'), Buffer.from(data.ab3Data));
         return true;
     }
     catch (err) {
