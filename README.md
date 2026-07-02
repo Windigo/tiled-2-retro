@@ -94,18 +94,21 @@ The **Tile Size** slider in the toolbar changes the visual grid size. This does 
 
 ### Amiga Export
 
-**File → Export Amiga** generates three files in the `amiga/` subfolder of your project:
+**File → Export Amiga** generates four files in the `amiga/` subfolder of your project:
 
 | File | Description |
 |------|-------------|
 | `tiles.iff` | Multi-bitplane ILBM of the full tilesheet image |
 | `map.bin` | Binary tilemap + flag data for **all maps** (`AB3M` v2 header format) |
-| `LoadMap.ab3` | AmiBlitz3 source code to load & render a map |
+| `LoadMap.ab3` | AmiBlitz3 source with the map data embedded as `Data.w` statements |
+| `LoadMapBin.ab3` | AmiBlitz3 source that reads the map data from `map.bin` at runtime |
 
-The AB3 code creates two bitmaps, loads the IFF tilesheet, reads the tilemap/flag
-data for every map, and renders one of them using `GetaShape`/`Blit` per tile.
-All maps are exported; set the `curMap` variable at the top of `LoadMap.ab3`
-(`0` to number-of-maps − 1) to choose which map is rendered.
+The AB3 code creates two bitmaps, loads the IFF tilesheet, obtains the tilemap/flag
+data, and renders one map using `GetaShape`/`Blit` per tile. `LoadMap.ab3` embeds the
+data directly, while `LoadMapBin.ab3` opens `map.bin` (via `OpenFile`/`Fields`/`Get`,
+reading native big-endian words) — keep `map.bin` and `tiles.iff` in the same drawer.
+Set the `curMap` variable at the top of either file (`0` to number-of-maps − 1) to
+choose which map is rendered.
 
 > **Note:** the generated `.ab3` source is plain ASCII with LF line endings.
 > Non-ASCII characters (e.g. in flag names) are stripped so the output stays
