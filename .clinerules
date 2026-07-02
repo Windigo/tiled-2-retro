@@ -1,0 +1,9 @@
+# Cline Rules
+
+## BlitzBasic / AmiBlitz
+
+- Wanneer er vragen zijn over BlitzBasic of AmiBlitz, of wanneer er BlitzBasic/AmiBlitz-code
+  gegenereerd moet worden, mag je de markdown-bestanden in de map `blitzbasic_manuals/` lezen
+  als referentie.
+- Begin altijd met `blitzbasic_manuals/Guide_To_Blitz_Basic.md`.
+- Raadpleeg indien nodig aanvullende markdown-bestanden in dezelfde map voor extra context.
