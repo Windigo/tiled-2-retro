@@ -6,12 +6,6 @@ interface BitDef {
   color: string;
 }
 
-/** Full bits config file contents. */
-interface BitsConfig {
-  bits: BitDef[];
-  tileFlags?: number[];
-}
-
 /** A single map/level within a project. */
 interface MapEntry {
   name: string;
@@ -127,14 +121,6 @@ const api = {
   /** Load a .project project file via native dialog. Returns { projectFolder, projectName, data } or null. */
   loadProject: (defaultPath?: string): Promise<LoadProjectResult | null> =>
     ipcRenderer.invoke('load-project', defaultPath),
-
-  /** Load the bits.json config file from the assets folder. */
-  loadBitsConfig: (): Promise<BitsConfig> =>
-    ipcRenderer.invoke('load-bits-config'),
-
-  /** Save both bits definitions and per-tile flags to bits.json. */
-  saveFullConfig: (bits: BitDef[], tileFlags: number[]): Promise<boolean> =>
-    ipcRenderer.invoke('save-full-config', { bits, tileFlags }),
 
   /** Open a dialog to load a previously exported map JSON. */
   loadMapJson: (): Promise<unknown> =>

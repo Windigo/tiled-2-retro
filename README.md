@@ -113,13 +113,18 @@ The **PNG ↔ IFF** tab lets you convert any PNG to IFF/ILBM independently:
 ```
 Offset  Size  Description
 0       4     Magic "AB3M"
-4       2     Version (1)
-6       2     Map columns
-8       2     Map rows
-10      2     Number of tiles in tilesheet
-12      N*2   Tile indices (row-major, uint16 BE)
-...     M*2   Tile flags (uint16 BE per tilesheet tile)
+4       2     Version (2)
+6       2     Number of maps
+8       2     Map columns (shared by all maps)
+10      2     Map rows (shared by all maps)
+12      2     Number of tiles in tilesheet
+14      T*2   Tile flags (uint16 BE per tilesheet tile)
+...     ...   For each map: cols*rows tile indices (row-major, uint16 BE)
 ```
+
+`T` is the number of tilesheet tiles. All maps share the same dimensions;
+map data blocks are stored consecutively, map 0 first. Tile flags are shared
+across all maps.
 
 ## IFF/ILBM Format
 

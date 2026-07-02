@@ -61,8 +61,6 @@ declare const editorApi: {
   readonly tilesheetRows: number;
   readonly mapCols: number;
   readonly mapRows: number;
-  loadBitsConfig: () => Promise<BitsConfig>;
-  saveFullConfig: (bits: BitDef[], tileFlags: number[]) => Promise<boolean>;
   loadMapJson: () => Promise<ExportData | null>;
   pickPng: () => Promise<{ dataUrl: string; fileName: string } | null>;
   pickFolder: (defaultPath?: string) => Promise<string | null>;
@@ -943,7 +941,6 @@ function renderFlagsUI(): void {
       const newColor = (e.target as HTMLInputElement).value;
       bitsConfig.bits[i].color = newColor;
       colorWrap.style.backgroundColor = newColor;
-      saveBitsConfig();
       drawTilesheet();
       drawMap();
     });
@@ -958,7 +955,6 @@ function renderFlagsUI(): void {
     nameInput.maxLength = 30;
     nameInput.addEventListener('input', () => {
       bitsConfig.bits[i].name = nameInput.value;
-      saveBitsConfig();
       drawTilesheet();
       drawMap();
       updateActiveDisplay();
@@ -970,11 +966,6 @@ function renderFlagsUI(): void {
     row.addEventListener('click', () => { activeBitIndex = i; renderFlagsUI(); });
     flagsColumn.appendChild(row);
   }
-}
-
-async function saveBitsConfig(): Promise<void> {
-  try { await editorApi.saveFullConfig(bitsConfig.bits, tileFlags); }
-  catch (err) { console.error('Failed to save full config:', err); }
 }
 
 // ─── Tile index helpers ───────────────────────────────────────────────────────
@@ -1029,7 +1020,6 @@ tilesCanvas.addEventListener('mousedown', (e: MouseEvent) => {
   } else if (e.button === 2) {
     const idx = row * cols + col;
     toggleBit(idx, activeBitIndex);
-    saveBitsConfig();
     updateActiveDisplay();
     drawTilesheet();
     drawMap();
@@ -1095,26 +1085,31 @@ function putU32BE(buf: Uint8Array, offset: number, value: number): void {
 }
 
 function buildMapBinary(): Uint8Array {
-  const curMap = getCurrentMap();
-  if (!curMap) return new Uint8Array(0);
+  const numMaps = maps.length;
+  if (numMaps === 0) return new Uint8Array(0);
   const numTiles = getMaxTiles();
   const mCols = gridMapCols();
   const mRows = gridMapRows();
-  const headerSize = 12;
-  const gridSize = mCols * mRows * 2;
+  const cells = mCols * mRows;
+  const headerSize = 14;
   const flagsSize = numTiles * 2;
-  const totalSize = headerSize + gridSize + flagsSize;
+  const mapsSize = numMaps * cells * 2;
+  const totalSize = headerSize + flagsSize + mapsSize;
   const buf = new Uint8Array(totalSize);
-  buf[0] = 0x41; buf[1] = 0x42; buf[2] = 0x33; buf[3] = 0x4D;
-  putU16BE(buf, 4, 1);
-  putU16BE(buf, 6, mCols);
-  putU16BE(buf, 8, mRows);
-  putU16BE(buf, 10, numTiles);
+  buf[0] = 0x41; buf[1] = 0x42; buf[2] = 0x33; buf[3] = 0x4D; // "AB3M"
+  putU16BE(buf, 4, 2);          // version 2 (multi-map)
+  putU16BE(buf, 6, numMaps);
+  putU16BE(buf, 8, mCols);      // shared by all maps
+  putU16BE(buf, 10, mRows);     // shared by all maps
+  putU16BE(buf, 12, numTiles);
   let off = headerSize;
-  for (let r = 0; r < mRows; r++) {
-    for (let c = 0; c < mCols; c++) { putU16BE(buf, off, curMap[r]?.[c] ?? 0); off += 2; }
-  }
   for (let i = 0; i < numTiles; i++) { putU16BE(buf, off, tileFlags[i] ?? 0); off += 2; }
+  for (let m = 0; m < numMaps; m++) {
+    const map = maps[m]?.map ?? [];
+    for (let r = 0; r < mRows; r++) {
+      for (let c = 0; c < mCols; c++) { putU16BE(buf, off, map[r]?.[c] ?? 0); off += 2; }
+    }
+  }
   return buf;
 }
 
@@ -1162,7 +1157,9 @@ function buildIffTilesheet(): Uint8Array {
   cmap.set(palette);
 
   function iffChunk(type: string, data: Uint8Array): Uint8Array {
-    const out = new Uint8Array(8 + data.length);
+    // IFF chunks must be padded to an even length; the size field excludes the pad byte.
+    const padded = data.length + (data.length & 1);
+    const out = new Uint8Array(8 + padded);
     for (let i = 0; i < 4; i++) out[i] = type.charCodeAt(i);
     putU32BE(out, 4, data.length);
     out.set(data, 8);
@@ -1204,6 +1201,8 @@ function buildIffTilesheet(): Uint8Array {
 function buildAmiBlitz3Loader(): string {
   const mCols = gridMapCols();
   const mRows = gridMapRows();
+  const cells = mCols * mRows;
+  const numMaps = Math.max(1, maps.length);
   const imgW = CONFIG.imgW;
   const imgH = CONFIG.imgH;
   const ts = gridTileSize;
@@ -1211,22 +1210,47 @@ function buildAmiBlitz3Loader(): string {
   const maxTiles = getMaxTiles();
   const bp = convBitplanes;
   const bitComments = bitsConfig.bits.map((b, i) => `;   Bit ${i}: ${b.name || '(unused)'}`).join('\n');
-  const curMap = getCurrentMap();
-  const gridDataLines: string[] = [];
+  const mapComments = maps.length
+    ? maps.map((m, i) => `;   Map ${i}: ${m.name || '(unnamed)'}`).join('\n')
+    : ';   Map 0: (unnamed)';
+
+  // AmiBlitz Data.w is a signed 16-bit word; values > 32767 (e.g. a tile flag
+  // using bit 15) must be written as their signed equivalent so the bit pattern
+  // is preserved when read back into a .w array.
+  const toSignedWord = (v: number): number => {
+    const u = v & 0xFFFF;
+    return u >= 0x8000 ? u - 0x10000 : u;
+  };
+
+  // Tile indices for every map, concatenated (map 0 first, row-major).
   const allGridVals: number[] = [];
-  for (let r = 0; r < mRows; r++) { for (let c = 0; c < mCols; c++) { allGridVals.push(curMap?.[r]?.[c] ?? 0); } }
+  for (let m = 0; m < numMaps; m++) {
+    const map = maps[m]?.map ?? [];
+    for (let r = 0; r < mRows; r++) { for (let c = 0; c < mCols; c++) { allGridVals.push(map[r]?.[c] ?? 0); } }
+  }
+  const gridDataLines: string[] = [];
   for (let i = 0; i < allGridVals.length; i += 16) { gridDataLines.push(`Data.w ${allGridVals.slice(i, i + 16).join(',')}`); }
+
+  const flagVals: number[] = [];
+  for (let i = 0; i < maxTiles; i++) flagVals.push(toSignedWord(tileFlags[i] ?? 0));
   const flagChunks: string[] = [];
-  for (let i = 0; i < maxTiles; i += 16) { const chunk = []; for (let j = i; j < Math.min(i + 16, maxTiles); j++) chunk.push(tileFlags[j]); flagChunks.push(`Data.w ${chunk.join(',')}`); }
+  for (let i = 0; i < maxTiles; i += 16) { flagChunks.push(`Data.w ${flagVals.slice(i, i + 16).join(',')}`); }
+
   return `; --------------------------------------------------------------
 ; RetroMap Map Loader
 ; Generated by RetroMapEditor -- AmiBlitz3 source
 ; --------------------------------------------------------------
+; Maps in this file (set curMap below to choose which one renders):
+${mapComments}
+;
+; Tile flag bits:
+${bitComments}
+; --------------------------------------------------------------
 
-Dim tilemap.w(${mCols * mRows})
+Dim tilemap.w(${numMaps * cells})
 Dim tileFlags.w(${maxTiles})
 
-${bitComments}
+curMap = 0   ; map to render, 0 to ${numMaps - 1}
 
 BitMap 0, ${imgW}, ${imgH}, ${bp}
 BitMap 1, ${mCols * ts}, ${mRows * ts}, ${bp}
@@ -1236,7 +1260,7 @@ BLITZ
 Slice 0,44,${bp}
 
 Restore MapData
-For i = 0 To ${mCols * mRows - 1}
+For i = 0 To ${numMaps * cells - 1}
   Read tmp.w
   tilemap(i) = tmp
 Next i
@@ -1253,9 +1277,10 @@ Show 1
 Use BitMap 1
 Cls 0
 
+mapBase = curMap * ${cells}
 For y = 0 To ${mRows - 1}
   For x = 0 To ${mCols - 1}
-    idx   = y * ${mCols} + x
+    idx   = mapBase + y * ${mCols} + x
     tile.w  = tilemap(idx)
     srcX.w  = (tile MOD ${sheetCols}) * ${ts}
     srcY.w  = tile / ${sheetCols}
@@ -1874,7 +1899,9 @@ function pngToIffMulti(img: HTMLImageElement, nPlanes: number): { iff: Uint8Arra
   cmap.set(palette);
 
   function iffChunk(type: string, data: Uint8Array): Uint8Array {
-    const out = new Uint8Array(8 + data.length);
+    // IFF chunks must be padded to an even length; the size field excludes the pad byte.
+    const padded = data.length + (data.length & 1);
+    const out = new Uint8Array(8 + padded);
     for (let i = 0; i < 4; i++) out[i] = type.charCodeAt(i);
     putU32BE(out, 4, data.length);
     out.set(data, 8);

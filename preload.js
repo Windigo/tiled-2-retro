@@ -32,10 +32,6 @@ const api = {
     loadProjectFile: (filePath) => electron_1.ipcRenderer.invoke('load-project-file', filePath),
     /** Load a .project project file via native dialog. Returns { projectFolder, projectName, data } or null. */
     loadProject: (defaultPath) => electron_1.ipcRenderer.invoke('load-project', defaultPath),
-    /** Load the bits.json config file from the assets folder. */
-    loadBitsConfig: () => electron_1.ipcRenderer.invoke('load-bits-config'),
-    /** Save both bits definitions and per-tile flags to bits.json. */
-    saveFullConfig: (bits, tileFlags) => electron_1.ipcRenderer.invoke('save-full-config', { bits, tileFlags }),
     /** Open a dialog to load a previously exported map JSON. */
     loadMapJson: () => electron_1.ipcRenderer.invoke('load-map-json')
 };

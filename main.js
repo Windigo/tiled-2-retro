@@ -36,6 +36,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
+/**
+ * Basic path hardening for renderer-supplied paths: reject empty, non-string,
+ * null-byte-injected, or relative paths before touching the filesystem.
+ */
+function isSafePath(p) {
+    return typeof p === 'string' && p.length > 0 && !p.includes('\0') && path.isAbsolute(p);
+}
 function createWindow() {
     const win = new electron_1.BrowserWindow({
         width: 1100,
@@ -104,6 +111,8 @@ electron_1.ipcMain.handle('save-iff-dialog', async (_event, defaultName) => {
 });
 /** Write raw bytes to a file (for IFF export). */
 electron_1.ipcMain.handle('write-file', async (_event, filePath, data) => {
+    if (!isSafePath(filePath))
+        return false;
     try {
         fs.writeFileSync(filePath, Buffer.from(data));
         return true;
@@ -119,6 +128,8 @@ electron_1.ipcMain.handle('write-file', async (_event, filePath, data) => {
  * Returns the project folder path on success, null on failure.
  */
 electron_1.ipcMain.handle('create-project', async (_event, data) => {
+    if (!isSafePath(data.folderPath))
+        return null;
     try {
         const projectDir = path.join(data.folderPath, data.projectName);
         const amigaDir = path.join(projectDir, 'amiga');
@@ -158,6 +169,8 @@ electron_1.ipcMain.handle('save-project-file', async (_event, data) => {
 });
 /** Export Amiga files (tiles.iff, map.bin, LoadMap.ab3) to the project's amiga/ subfolder. */
 electron_1.ipcMain.handle('export-amiga', async (_event, data) => {
+    if (!isSafePath(data.projectFolder))
+        return false;
     try {
         const amigaDir = path.join(data.projectFolder, 'amiga');
         fs.mkdirSync(amigaDir, { recursive: true });
@@ -187,6 +200,8 @@ electron_1.ipcMain.handle('check-amiga-export', async (_event, projectFolder) =>
 });
 /** Read a PNG file from disk and return it as a data URL. */
 electron_1.ipcMain.handle('load-png-file', async (_event, filePath) => {
+    if (!isSafePath(filePath))
+        return null;
     try {
         const buffer = fs.readFileSync(filePath);
         const base64 = buffer.toString('base64');
@@ -199,6 +214,8 @@ electron_1.ipcMain.handle('load-png-file', async (_event, filePath) => {
 });
 /** List a directory; returns { files, folders } for the custom file browser. */
 electron_1.ipcMain.handle('list-directory', async (_event, dirPath) => {
+    if (!isSafePath(dirPath))
+        return null;
     try {
         const entries = fs.readdirSync(dirPath, { withFileTypes: true });
         const folders = entries.filter(e => e.isDirectory()).map(e => e.name).sort();
@@ -211,6 +228,8 @@ electron_1.ipcMain.handle('list-directory', async (_event, dirPath) => {
 });
 /** Load a project file (.project) at the given path. */
 electron_1.ipcMain.handle('load-project-file', async (_event, filePath) => {
+    if (!isSafePath(filePath))
+        return null;
     try {
         const raw = fs.readFileSync(filePath, 'utf-8');
         const projectFolder = path.dirname(filePath);
@@ -246,43 +265,7 @@ electron_1.ipcMain.handle('load-project', async (_event, defaultPath) => {
         return null;
     }
 });
-// ─── Legacy IPC (bits config) — kept for export compatibility ────────────────
-const bitsConfigPath = path.join(__dirname, 'assets', 'bits.json');
-electron_1.ipcMain.handle('load-bits-config', async () => {
-    const MAX_TILES = 400;
-    try {
-        if (fs.existsSync(bitsConfigPath)) {
-            const raw = fs.readFileSync(bitsConfigPath, 'utf-8');
-            const data = JSON.parse(raw);
-            if (!data.tileFlags || !Array.isArray(data.tileFlags)) {
-                data.tileFlags = new Array(MAX_TILES).fill(0);
-            }
-            else {
-                while (data.tileFlags.length < MAX_TILES) {
-                    data.tileFlags.push(0);
-                }
-            }
-            return data;
-        }
-    }
-    catch (err) {
-        console.error('Failed to load bits config:', err);
-    }
-    return null;
-});
-electron_1.ipcMain.handle('save-full-config', async (_event, data) => {
-    try {
-        const dir = path.dirname(bitsConfigPath);
-        if (!fs.existsSync(dir))
-            fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(bitsConfigPath, JSON.stringify(data, null, 2), 'utf-8');
-        return true;
-    }
-    catch (err) {
-        console.error('Failed to save full config:', err);
-        return false;
-    }
-});
+// ─── Legacy IPC (map JSON) ───────────────────────────────────────────────────
 electron_1.ipcMain.handle('load-map-json', async () => {
     const result = await electron_1.dialog.showOpenDialog({
         title: 'Load Exported Map JSON',

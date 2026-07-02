@@ -2,6 +2,14 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
+/**
+ * Basic path hardening for renderer-supplied paths: reject empty, non-string,
+ * null-byte-injected, or relative paths before touching the filesystem.
+ */
+function isSafePath(p: unknown): p is string {
+  return typeof p === 'string' && p.length > 0 && !p.includes('\0') && path.isAbsolute(p);
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1100,
@@ -75,6 +83,7 @@ ipcMain.handle('save-iff-dialog', async (_event: unknown, defaultName?: string):
 
 /** Write raw bytes to a file (for IFF export). */
 ipcMain.handle('write-file', async (_event: unknown, filePath: string, data: number[]): Promise<boolean> => {
+  if (!isSafePath(filePath)) return false;
   try {
     fs.writeFileSync(filePath, Buffer.from(data));
     return true;
@@ -105,6 +114,7 @@ ipcMain.handle('create-project', async (
     convBitplanes?: number;
   }
 ): Promise<string | null> => {
+  if (!isSafePath(data.folderPath)) return null;
   try {
     const projectDir = path.join(data.folderPath, data.projectName);
     const amigaDir = path.join(projectDir, 'amiga');
@@ -169,6 +179,7 @@ ipcMain.handle('export-amiga', async (
     ab3Data: number[];
   }
 ): Promise<boolean> => {
+  if (!isSafePath(data.projectFolder)) return false;
   try {
     const amigaDir = path.join(data.projectFolder, 'amiga');
     fs.mkdirSync(amigaDir, { recursive: true });
@@ -198,6 +209,7 @@ ipcMain.handle('check-amiga-export', async (_event: unknown, projectFolder: stri
 
 /** Read a PNG file from disk and return it as a data URL. */
 ipcMain.handle('load-png-file', async (_event: unknown, filePath: string): Promise<string | null> => {
+  if (!isSafePath(filePath)) return null;
   try {
     const buffer = fs.readFileSync(filePath);
     const base64 = buffer.toString('base64');
@@ -210,6 +222,7 @@ ipcMain.handle('load-png-file', async (_event: unknown, filePath: string): Promi
 
 /** List a directory; returns { files, folders } for the custom file browser. */
 ipcMain.handle('list-directory', async (_event: unknown, dirPath: string): Promise<{ path: string; folders: string[]; files: string[] } | null> => {
+  if (!isSafePath(dirPath)) return null;
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
     const folders = entries.filter(e => e.isDirectory()).map(e => e.name).sort();
@@ -222,6 +235,7 @@ ipcMain.handle('list-directory', async (_event: unknown, dirPath: string): Promi
 
 /** Load a project file (.project) at the given path. */
 ipcMain.handle('load-project-file', async (_event: unknown, filePath: string): Promise<{ projectFolder: string; projectName: string; data: unknown } | null> => {
+  if (!isSafePath(filePath)) return null;
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
     const projectFolder = path.dirname(filePath);
@@ -257,42 +271,7 @@ ipcMain.handle('load-project', async (_event: unknown, defaultPath?: string): Pr
   }
 });
 
-// ─── Legacy IPC (bits config) — kept for export compatibility ────────────────
-
-const bitsConfigPath = path.join(__dirname, 'assets', 'bits.json');
-
-ipcMain.handle('load-bits-config', async (): Promise<unknown> => {
-  const MAX_TILES = 400;
-  try {
-    if (fs.existsSync(bitsConfigPath)) {
-      const raw = fs.readFileSync(bitsConfigPath, 'utf-8');
-      const data = JSON.parse(raw);
-      if (!data.tileFlags || !Array.isArray(data.tileFlags)) {
-        data.tileFlags = new Array(MAX_TILES).fill(0);
-      } else {
-        while (data.tileFlags.length < MAX_TILES) {
-          data.tileFlags.push(0);
-        }
-      }
-      return data;
-    }
-  } catch (err) {
-    console.error('Failed to load bits config:', err);
-  }
-  return null;
-});
-
-ipcMain.handle('save-full-config', async (_event: unknown, data: { bits: unknown; tileFlags: unknown }): Promise<boolean> => {
-  try {
-    const dir = path.dirname(bitsConfigPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(bitsConfigPath, JSON.stringify(data, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    console.error('Failed to save full config:', err);
-    return false;
-  }
-});
+// ─── Legacy IPC (map JSON) ───────────────────────────────────────────────────
 
 ipcMain.handle('load-map-json', async (): Promise<unknown> => {
   const result = await dialog.showOpenDialog({
