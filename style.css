@@ -594,6 +594,40 @@ body {
   font-family: 'Consolas', 'Courier New', monospace;
 }
 
+.preview-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid #0f3460;
+  margin-bottom: 8px;
+}
+
+.preview-tab-btn {
+  background: transparent;
+  color: #6a7a9a;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Consolas', 'Courier New', monospace;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.preview-tab-btn:hover {
+  color: #e0e0e0;
+}
+
+.preview-tab-btn.active {
+  color: #e94560;
+  border-bottom-color: #e94560;
+}
+
+.preview-tabs-note {
+  margin-left: auto;
+}
+
 .preview-code {
   width: 100%;
   height: 400px;

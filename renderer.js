@@ -1375,6 +1375,7 @@ function showAmigaPreview() {
     iffCtx.imageSmoothingEnabled = false;
     iffCtx.drawImage(tilesheet, 0, 0, iffCanvas.width, iffCanvas.height);
     document.getElementById('ab3-preview').value = buildAmiBlitz3Loader();
+    document.getElementById('ab3-bin-preview').value = buildAmiBlitz3BinLoader();
     document.getElementById('amiga-preview-overlay').classList.remove('hidden');
 }
 function formatSize(bytes) { return bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB'; }
@@ -1632,6 +1633,15 @@ document.getElementById('btn-fb-open').addEventListener('click', async () => {
 });
 document.getElementById('btn-preview-cancel').addEventListener('click', () => document.getElementById('amiga-preview-overlay').classList.add('hidden'));
 document.getElementById('btn-preview-export').addEventListener('click', () => doExportAmiga());
+// Switch between the embedded (LoadMap.ab3) and binary (LoadMapBin.ab3) source previews.
+document.querySelectorAll('.preview-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const target = btn.dataset.ab3tab;
+        document.querySelectorAll('.preview-tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+        document.getElementById('ab3-preview').classList.toggle('hidden', target !== 'embedded');
+        document.getElementById('ab3-bin-preview').classList.toggle('hidden', target !== 'bin');
+    });
+});
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────
 const tabLevelEditor = document.getElementById('tab-level-editor');
 const tabPngIff = document.getElementById('tab-png-iff');

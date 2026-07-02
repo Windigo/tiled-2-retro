@@ -196,11 +196,13 @@
               <span id="map-info" class="preview-filesize">—</span>
             </div>
           </div>
-          <div class="preview-file-header">
-            <span class="preview-filename">LoadMap.ab3</span>
-            <span class="preview-filesize">AmiBlitz3 source</span>
+          <div class="preview-tabs">
+            <button type="button" class="preview-tab-btn active" data-ab3tab="embedded">LoadMap.ab3</button>
+            <button type="button" class="preview-tab-btn" data-ab3tab="bin">LoadMapBin.ab3</button>
+            <span class="preview-filesize preview-tabs-note">AmiBlitz3 source</span>
           </div>
           <textarea id="ab3-preview" class="preview-code" readonly spellcheck="false"></textarea>
+          <textarea id="ab3-bin-preview" class="preview-code hidden" readonly spellcheck="false"></textarea>
         </div>
         <div class="modal-footer">
           <button id="btn-preview-cancel" class="btn-secondary">Cancel</button>
