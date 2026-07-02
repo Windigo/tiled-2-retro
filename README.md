@@ -26,8 +26,16 @@ retro-map-editor/
 │   ├── main.ts         # Electron main process (IPC handlers, file I/O)
 │   ├── preload.ts      # Context bridge API exposed to renderer
 │   └── renderer.ts     # All editor logic (canvas drawing, IFF build, UI)
+├── main.js             # Compiled output of src/main.ts (+ .map)
+├── preload.js          # Compiled output of src/preload.ts (+ .map)
+├── renderer.js         # Compiled output of src/renderer.ts (+ .map)
 ├── assets/
-│   └── jszip.min.js    # JSZip (loaded via script tag)
+│   ├── jszip.min.js    # JSZip (loaded via script tag)
+│   ├── bits.json       # Legacy flag config (no longer used at runtime)
+│   └── monochrome_tilemap_packed.iff  # Sample tilesheet
+├── blitzbasic_manuals/ # BlitzBasic/AmiBlitz reference docs
+├── scripts/            # Helper scripts (e.g. png_to_iff.py)
+├── .clinerules         # AmiBlitz3 code-generation guidelines
 ├── package.json
 └── tsconfig.json
 ```
@@ -91,10 +99,17 @@ The **Tile Size** slider in the toolbar changes the visual grid size. This does 
 | File | Description |
 |------|-------------|
 | `tiles.iff` | Multi-bitplane ILBM of the full tilesheet image |
-| `map.bin` | Binary tilemap + flag data (`AB3M` header format) |
-| `LoadMap.ab3` | AmiBlitz3 source code to load & render the map |
+| `map.bin` | Binary tilemap + flag data for **all maps** (`AB3M` v2 header format) |
+| `LoadMap.ab3` | AmiBlitz3 source code to load & render a map |
 
-The AB3 code creates two bitmaps, loads the IFF tilesheet, reads tilemap/flag data, and renders the map using `GetaShape`/`Blit` per tile.
+The AB3 code creates two bitmaps, loads the IFF tilesheet, reads the tilemap/flag
+data for every map, and renders one of them using `GetaShape`/`Blit` per tile.
+All maps are exported; set the `curMap` variable at the top of `LoadMap.ab3`
+(`0` to number-of-maps − 1) to choose which map is rendered.
+
+> **Note:** the generated `.ab3` source is plain ASCII with LF line endings.
+> Non-ASCII characters (e.g. in flag names) are stripped so the output stays
+> compatible with the Amiga. Load it into AmiBlitz3 via its ASCII import.
 
 ### PNG → IFF Converter
 
