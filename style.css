@@ -193,9 +193,7 @@ body {
 
 #tiles-panel {
   flex: 1;
-  min-width: 340px;
-  align-items: center;
-  overflow-y: auto;
+  min-width: 0;
 }
 
 /* ---- TITLES ---- */
@@ -292,6 +290,16 @@ body {
   border-radius: 4px;
   image-rendering: pixelated;
   cursor: crosshair;
+  display: block;
+}
+
+/* ---- TILESHEET SCROLL WRAPPER ---- */
+.tilesheet-scroll-wrapper {
+  width: 600px;
+  height: calc(100vh - 40px - 28px - 10px - 12px - 12px - 36px - 30px - 16px - 12px - 10px);
+  overflow: scroll;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
 }
 
 /* ---- TILESHEET + FLAGS ROW ---- */
