@@ -2190,12 +2190,26 @@ function parseTiledLayers(mapJson) {
     }
     return layers;
 }
-function buildTiledMapAb3(mapJson) {
+function buildTiledMapAb3(mapJson, imageWidth, imageHeight) {
     const mapCols = mapJson.width;
     const mapRows = mapJson.height;
     const tileSize = mapJson.tilewidth;
     const cells = mapCols * mapRows;
-    // Flatten all tile layers into a single tile array (GID → 0-based)
+    // Build a lookup: for each GID, find its parent tileset's firstgid.
+    // Tiled GIDs are global: gid >= firstgid of the tileset that owns it.
+    // The 0‑based tile index = gid - firstgid.
+    const firstgidList = (mapJson.tilesets || []).map((ts) => ts.firstgid || 1);
+    function gidToTile(gid) {
+        if (!gid)
+            return 0;
+        let best = 0;
+        for (const fg of firstgidList) {
+            if (fg <= gid && fg > best)
+                best = fg;
+        }
+        return best > 0 ? gid - best : gid - 1; // fallback: treat as firstgid=1
+    }
+    // Flatten all tile layers into a single tile array
     // Layer 0 drawn first, higher layers drawn on top
     const allTiles = [];
     for (let y = 0; y < mapRows; y++) {
@@ -2207,13 +2221,7 @@ function buildTiledMapAb3(mapJson) {
                 const gid = layer.data[y * layer.width + x];
                 if (!gid || gid === 0)
                     continue;
-                // Convert GID (1-based) to 0-based tile index
-                let bestGid = 0;
-                for (const ts of (mapJson.tilesets || [])) {
-                    if (ts.firstgid <= gid && ts.firstgid > bestGid)
-                        bestGid = ts.firstgid;
-                }
-                tile = gid - bestGid;
+                tile = gidToTile(gid);
             }
             allTiles.push(tile);
         }
@@ -2222,9 +2230,11 @@ function buildTiledMapAb3(mapJson) {
     for (let i = 0; i < allTiles.length; i += 16) {
         dataLines.push(`Data.w ${allTiles.slice(i, i + 16).join(',')}`);
     }
+    // Use actual image dimensions (what the IFF will be) for the tilesheet grid,
+    // NOT the JSON metadata which may differ from the real PNG size.
     const ts0 = mapJson.tilesets?.[0];
-    const sheetW = ts0?.imagewidth || 320;
-    const sheetH = ts0?.imageheight || 256;
+    const sheetW = imageWidth ?? ts0?.imagewidth ?? 320;
+    const sheetH = imageHeight ?? ts0?.imageheight ?? 256;
     const sheetCols = Math.max(1, Math.floor(sheetW / tileSize));
     const bp = 4;
     return `; ---------------------------------------------------------------
@@ -2290,8 +2300,8 @@ End
 ${dataLines.join('\n')}
 `;
 }
-function buildTiledGameAb3(layers, mapJson, bp) {
-    return buildTiledMapAb3(mapJson);
+function buildTiledGameAb3(layers, mapJson, bp, imageWidth, imageHeight) {
+    return buildTiledMapAb3(mapJson, imageWidth, imageHeight);
 }
 function buildTiledPlayerAb3() {
     return `; player.ab3 (Tiled export) - not used, everything is in map.ab3
@@ -2367,9 +2377,9 @@ async function initTiledViewerTab() {
             iffData = buildTiledIff(image, bp);
         }
         // Build .ab3 sources
-        const mapsAb3raw = buildTiledMapAb3(mapJson);
+        const mapsAb3raw = buildTiledMapAb3(mapJson, imgW, imgH);
         const mapsAb3Bytes = stringToAmigaBytes(mapsAb3raw);
-        const gameAb3raw = buildTiledGameAb3(layers, mapJson, bp);
+        const gameAb3raw = buildTiledGameAb3(layers, mapJson, bp, imgW, imgH);
         const gameAb3Bytes = stringToAmigaBytes(gameAb3raw);
         const playerAb3Bytes = stringToAmigaBytes(buildTiledPlayerAb3());
         // Export to the folder where the JSON map lives
