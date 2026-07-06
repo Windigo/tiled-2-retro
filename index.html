@@ -24,202 +24,68 @@
     <div class="menu-dropdown">
       <button class="menu-title">View</button>
       <div class="menu-dropdown-content">
-        <button class="menu-item" data-action="tab-level-editor">Level Editor</button>
-        <button class="menu-item" data-action="tab-png-iff">PNG → IFF Converter</button>
         <button class="menu-item" data-action="tab-tiled-viewer">Tiled Viewer</button>
+        <button class="menu-item" data-action="tab-png-iff">PNG → IFF Converter</button>
       </div>
     </div>
   </div>
 
   <!-- TOP BAR: Tab switcher -->
   <div id="top-bar">
-    <button id="tab-level-editor" class="tab-btn active">Level Editor</button>
+    <button id="tab-tiled-viewer" class="tab-btn active">Tiled Viewer</button>
     <button id="tab-png-iff" class="tab-btn">PNG → IFF Converter</button>
-    <button id="tab-tiled-viewer" class="tab-btn">Tiled Viewer</button>
     <span id="project-name" class="project-name clickable" title="Click to rename project">— no project —</span>
     <input id="project-name-input" class="project-name-input hidden" type="text">
   </div>
 
-  <!-- ===== TAB 1: LEVEL EDITOR ===== -->
-  <div id="tab-content-level-editor" class="tab-content active">
-    <div id="app">
-      <!-- LEFT PANEL: Map editor -->
-      <div id="editor-panel">
-        <h2 class="panel-title">Map Editor <span class="dim" id="map-dims">—</span></h2>
-        <div id="map-controls">
-        </div>
-        <canvas id="map-canvas"></canvas>
-        <div id="tile-info">Active tile: <span id="active-tile-id">0</span> (0,0)</div>
-        <div id="bits-map-toggle">
-          <label class="switch">
-            <input type="checkbox" id="chk-bits-on-map">
-            <span class="slider"></span>
-          </label>
-          <span class="toggle-label">Show bits on map</span>
-        </div>
+  <!-- ===== HIDDEN: Level editor DOM elements (kept to satisfy renderer.ts lookups) ===== -->
+  <div style="display:none;" aria-hidden="true">
+    <div id="tab-content-level-editor">
+      <canvas id="map-canvas"></canvas>
+      <canvas id="tiles-canvas"></canvas>
+      <span id="active-tile-id"></span>
+      <div id="flags-column"></div>
+      <input type="checkbox" id="chk-bits-on-map">
+      <input type="range" id="tile-size-slider">
+      <span id="tile-size-value"></span>
+      <div id="map-tabs"></div>
+      <span id="map-dims"></span>
+      <span id="tilesheet-dims"></span>
+      <div id="new-project-overlay" class="hidden"><div id="new-project-title"></div><button id="btn-modal-create"></button><button id="btn-modal-save-settings" class="hidden"></button></div>
+      <div id="rename-map-overlay" class="hidden"><input id="input-rename-map"><span id="rename-map-label"></span></div>
+      <div id="delete-map-overlay" class="hidden"><span id="delete-map-message"></span></div>
+      <div id="file-browser-overlay" class="hidden"><span id="fb-current-path"></span><div id="fb-list"></div><button id="btn-fb-open"></button></div>
+      <div id="amiga-preview-overlay" class="hidden"><span id="iff-info"></span><span id="map-info"></span><canvas id="iff-preview-canvas"></canvas><textarea id="ab3-preview"></textarea><textarea id="ab3-bin-preview"></textarea><textarea id="ab3-player-preview"></textarea></div>
+      <!-- modal elements -->
+      <button id="btn-pick-folder"></button>
+      <button id="btn-pick-png"></button>
+      <span id="folder-path"></span>
+      <span id="png-file-name"></span>
+      <input type="text" id="input-project-name">
+      <input type="text" id="input-map-name">
+      <input type="range" id="modal-bitplanes">
+      <span id="modal-bp-label"></span>
+      <span id="modal-colors-label"></span>
+      <div id="modal-iff-preview-row">
+        <canvas id="modal-png-preview-canvas"></canvas>
+        <canvas id="modal-iff-preview-canvas"></canvas>
       </div>
-
-      <!-- MIDDLE PANEL: Level list (vertical tabs) -->
-      <div id="levels-panel">
-        <h2 class="panel-title">Levels</h2>
-        <div id="map-tabs" class="level-list"></div>
-      </div>
-
-      <!-- RIGHT PANEL: Tile selector + Flags -->
-      <div id="tiles-panel">
-        <h2 class="panel-title">Tile Selector <span class="dim" id="tilesheet-dims">—</span></h2>
-        <label class="tile-size-label">Tile:
-          <input type="range" id="tile-size-slider" min="8" max="64" value="16" step="1">
-          <span id="tile-size-value">16</span>px
-        </label>
-        <div id="tiles-row">
-          <div class="tilesheet-scroll-wrapper">
-            <canvas id="tiles-canvas"></canvas>
-          </div>
-          <div id="flags-column">
-            <!-- 16 fixed flag rows rendered dynamically -->
-          </div>
-        </div>
-        <p class="hint">Left‑click a tile to select it. Right‑click a tile to toggle the active flag.<br>Click a flag row to select it as active. Click/drag on the map to place tiles.</p>
-      </div>
-    </div>
-
-    <!-- NEW PROJECT MODAL -->
-    <div id="new-project-overlay" class="modal-overlay hidden">
-      <div class="modal">
-        <h2 id="new-project-title">New Project</h2>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Project name</label>
-            <input type="text" id="input-project-name" value="MyProject" placeholder="MyProject">
-          </div>
-          <div class="form-group">
-            <label>Initial map name</label>
-            <input type="text" id="input-map-name" value="Level 1" placeholder="Level 1">
-          </div>
-          <div class="form-group">
-            <label>Location</label>
-            <div class="file-picker">
-              <button id="btn-pick-folder">Browse…</button>
-              <span id="folder-path" class="file-name">no folder selected</span>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Tilesheet PNG</label>
-            <div class="file-picker">
-              <button id="btn-pick-png">Select PNG…</button>
-              <span id="png-file-name" class="file-name">no file selected</span>
-            </div>
-          </div>
-          <div id="modal-iff-preview-row" style="display:none; margin-bottom:14px;">
-            <div class="form-group">
-              <label>Bitplanes: <strong id="modal-bp-label">4</strong> (<span id="modal-colors-label">16 colors</span>)</label>
-              <input type="range" id="modal-bitplanes" min="1" max="8" value="4" step="1">
-            </div>
-            <div style="display:flex; gap:12px; align-items:flex-start;">
-              <div><label style="font-size:11px;color:#a0b0c0;">PNG</label><br><canvas id="modal-png-preview-canvas" width="200" height="160" style="image-rendering:pixelated; display:block;"></canvas></div>
-              <div><label style="font-size:11px;color:#a0b0c0;">IFF (quantized)</label><br><canvas id="modal-iff-preview-canvas" width="200" height="160" style="image-rendering:pixelated; display:block;"></canvas></div>
-            </div>
-          </div>
-          <p class="hint">Amiga standard: 20×16 = 320×256 px (16×16 tiles)</p>
-        </div>
-        <div class="modal-footer">
-          <button id="btn-modal-cancel" class="btn-secondary">Cancel</button>
-          <button id="btn-modal-create" class="btn-primary">Create Project</button>
-          <button id="btn-modal-save-settings" class="btn-primary hidden">Save Settings</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- RENAME MAP MODAL -->
-    <div id="rename-map-overlay" class="modal-overlay hidden">
-      <div class="modal">
-        <h2>Rename Map</h2>
-        <div class="modal-body">
-          <div class="form-group">
-            <label id="rename-map-label">Map name</label>
-            <input type="text" id="input-rename-map" value="" placeholder="Map name">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button id="btn-rename-cancel" class="btn-secondary">Cancel</button>
-          <button id="btn-rename-confirm" class="btn-primary">Rename</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- DELETE MAP CONFIRM MODAL -->
-    <div id="delete-map-overlay" class="modal-overlay hidden">
-      <div class="modal">
-        <h2>Delete Map</h2>
-        <div class="modal-body">
-          <p id="delete-map-message" style="color:#a0b0c0; font-size:14px;">Are you sure?</p>
-        </div>
-        <div class="modal-footer">
-          <button id="btn-delete-cancel" class="btn-secondary">Cancel</button>
-          <button id="btn-delete-confirm" class="btn-primary" style="background:#e94560; border-color:#e94560;">Delete</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- FILE BROWSER MODAL -->
-    <div id="file-browser-overlay" class="modal-overlay hidden">
-      <div class="modal modal-wide">
-        <h2>Load Project</h2>
-        <div class="modal-body">
-          <div class="fb-location">
-            <span class="fb-path" id="fb-current-path">/</span>
-          </div>
-          <div class="fb-list" id="fb-list"></div>
-        </div>
-        <div class="modal-footer">
-          <button id="btn-fb-cancel" class="btn-secondary">Cancel</button>
-          <button id="btn-fb-open" class="btn-primary" disabled>Open</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- AMIGA EXPORT PREVIEW MODAL -->
-    <div id="amiga-preview-overlay" class="modal-overlay hidden">
-      <div class="modal modal-wide">
-        <h2>Amiga Export Preview</h2>
-        <div class="modal-body">
-          <div class="preview-visuals">
-            <div class="preview-visual-block">
-              <span class="preview-filename">tiles.iff</span>
-              <span id="iff-info" class="preview-filesize">—</span>
-              <div class="iff-hover-wrap">
-                <span class="iff-hover-trigger">hover to preview</span>
-                <div class="iff-hover-popup">
-                  <canvas id="iff-preview-canvas" class="preview-thumb"></canvas>
-                </div>
-              </div>
-            </div>
-            <div class="preview-visual-block">
-              <span class="preview-filename">maps.ab3</span>
-              <span id="map-info" class="preview-filesize">—</span>
-            </div>
-          </div>
-          <div class="preview-tabs">
-            <button type="button" class="preview-tab-btn active" data-ab3tab="maps">maps.ab3</button>
-            <button type="button" class="preview-tab-btn" data-ab3tab="game">game.ab3</button>
-            <button type="button" class="preview-tab-btn" data-ab3tab="player">player.ab3</button>
-            <span class="preview-filesize preview-tabs-note">AmiBlitz3 source</span>
-          </div>
-          <textarea id="ab3-preview" class="preview-code" readonly spellcheck="false"></textarea>
-          <textarea id="ab3-bin-preview" class="preview-code hidden" readonly spellcheck="false"></textarea>
-          <textarea id="ab3-player-preview" class="preview-code hidden" readonly spellcheck="false"></textarea>
-        </div>
-        <div class="modal-footer">
-          <button id="btn-preview-cancel" class="btn-secondary">Cancel</button>
-          <button id="btn-preview-export" class="btn-primary">Export</button>
-        </div>
-      </div>
+      <button id="btn-modal-cancel"></button>
+      <button id="btn-rename-cancel"></button>
+      <button id="btn-rename-confirm"></button>
+      <button id="btn-delete-cancel"></button>
+      <button id="btn-delete-confirm"></button>
+      <button id="btn-fb-cancel"></button>
+      <button id="btn-preview-cancel"></button>
+      <button id="btn-preview-export"></button>
+      <button id="btn-modal-save-settings"></button>
+      <!-- Hidden tab-level-editor button -->
+      <button id="tab-level-editor"></button>
     </div>
   </div>
 
-  <!-- ===== TAB 3: TILED VIEWER ===== -->
-  <div id="tab-content-tiled-viewer" class="tab-content">
+  <!-- ===== TAB 1: TILED VIEWER ===== -->
+  <div id="tab-content-tiled-viewer" class="tab-content active">
     <div id="tiled-tab" style="display:flex;flex-direction:column;height:100%;background:#0d1117;">
       <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#16213e;border-bottom:1px solid #0f3460;flex-shrink:0;">
         <button id="tiled-browse" style="background:#e94560;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;">Browse…</button>

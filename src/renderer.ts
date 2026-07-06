@@ -1492,8 +1492,6 @@ let cachedGameAb3Bytes: Uint8Array | null = null;
 let cachedPlayerAb3Bytes: Uint8Array | null = null;
 let hasExportData = false;
 
-const previewBtn = document.getElementById('tab-level-editor') as HTMLButtonElement;
-
 function setPreviewEnabled(enabled: boolean): void {
   hasExportData = enabled;
 }
@@ -1764,18 +1762,14 @@ document.querySelectorAll<HTMLButtonElement>('.preview-tab-btn').forEach(btn => 
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────
 
-const tabLevelEditor = document.getElementById('tab-level-editor') as HTMLButtonElement;
 const tabPngIff = document.getElementById('tab-png-iff') as HTMLButtonElement;
 const tabTiledViewer = document.getElementById('tab-tiled-viewer') as HTMLButtonElement;
-const contentLevelEditor = document.getElementById('tab-content-level-editor')!;
 const contentPngIff = document.getElementById('tab-content-png-iff')!;
 const contentTiledViewer = document.getElementById('tab-content-tiled-viewer')!;
 
 function deactivateAllTabs(): void {
-  tabLevelEditor.classList.remove('active');
   tabPngIff.classList.remove('active');
   if (tabTiledViewer) tabTiledViewer.classList.remove('active');
-  contentLevelEditor.classList.remove('active');
   contentPngIff.classList.remove('active');
   contentTiledViewer.classList.remove('active');
 }
@@ -1785,17 +1779,13 @@ function switchTab(tabName: string): void {
   if (tabName === 'png-iff') {
     tabPngIff.classList.add('active');
     contentPngIff.classList.add('active');
-  } else if (tabName === 'tiled-viewer') {
+  } else {
     tabTiledViewer.classList.add('active');
     contentTiledViewer.classList.add('active');
     initTiledViewerTab();
-  } else {
-    tabLevelEditor.classList.add('active');
-    contentLevelEditor.classList.add('active');
   }
 }
 
-tabLevelEditor.addEventListener('click', () => switchTab('level-editor'));
 tabPngIff.addEventListener('click', () => switchTab('png-iff'));
 tabTiledViewer.addEventListener('click', () => switchTab('tiled-viewer'));
 
@@ -1811,7 +1801,7 @@ document.querySelectorAll('#menu-bar .menu-item').forEach(el => {
 function handleMenuAction(action: string): void {
   switch (action) {
     case 'new':
-      switchTab('level-editor');
+      switchTab('tiled-viewer');
       document.getElementById('new-project-title')!.textContent = 'New Project';
       document.getElementById('btn-modal-create')!.classList.remove('hidden');
       document.getElementById('btn-modal-save-settings')!.classList.add('hidden');
@@ -1825,11 +1815,11 @@ function handleMenuAction(action: string): void {
       document.getElementById('new-project-overlay')!.classList.remove('hidden');
       break;
     case 'load':
-      switchTab('level-editor');
+      switchTab('tiled-viewer');
       showLoadProjectBrowser();
       break;
     case 'save':
-      switchTab('level-editor');
+      switchTab('tiled-viewer');
       saveProject();
       break;
     case 'settings':
@@ -1837,16 +1827,13 @@ function handleMenuAction(action: string): void {
       showProjectSettings();
       break;
     case 'export':
-      switchTab('level-editor');
+      switchTab('tiled-viewer');
       showAmigaPreview();
       break;
     case 'preview':
-      switchTab('level-editor');
+      switchTab('tiled-viewer');
       if (hasExportData) showAmigaPreview();
       else showToast('No export data yet. Export first.', 'error');
-      break;
-    case 'tab-level-editor':
-      switchTab('level-editor');
       break;
     case 'tab-png-iff':
       switchTab('png-iff');
@@ -1858,7 +1845,7 @@ function handleMenuAction(action: string): void {
 }
 
 function showProjectSettings(): void {
-  switchTab('level-editor');
+  switchTab('tiled-viewer');
   const titleEl = document.getElementById('new-project-title')!;
   titleEl.textContent = 'Project Settings';
   document.getElementById('btn-modal-create')!.classList.add('hidden');
