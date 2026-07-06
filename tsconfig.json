@@ -13,6 +13,6 @@
     "sourceMap": true,
     "declaration": false
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "src/tiled-viewer.ts"]
+  "include": ["src/main.ts", "src/preload.ts", "src/renderer.ts"],
+  "exclude": ["node_modules"]
 }

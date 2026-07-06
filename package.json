@@ -1,7 +1,7 @@
 {
   "name": "retro-map-editor",
-  "version": "1.0.0",
-  "description": "Retro Map Editor for AmiBlitz3",
+  "version": "2.0.0",
+  "description": "Retro Map Editor for AmiBlitz3 — Tiled Viewer + IFF Converter",
   "main": "main.js",
   "scripts": {
     "start": "tsc && tsc -p tsconfig.viewer.json && electron .",
@@ -11,14 +11,11 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@types/jszip": "^3.4.0",
     "@types/node": "^26.0.0",
     "electron": "^42.5.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@mapeditor/tiled-api": "^1.12.0",
-    "jszip": "^3.10.1",
-    "lit": "^3.3.3"
+    "jszip": "^3.10.1"
   }
 }

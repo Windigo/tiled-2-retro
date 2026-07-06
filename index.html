@@ -10,18 +10,6 @@
   <!-- CUSTOM MENU BAR (inside the window) -->
   <div id="menu-bar">
     <div class="menu-dropdown">
-      <button class="menu-title">File</button>
-      <div class="menu-dropdown-content">
-        <button class="menu-item" data-action="new">New Project</button>
-        <button class="menu-item" data-action="load">Load Project</button>
-        <button class="menu-item" data-action="save">Save Project</button>
-        <button class="menu-item" data-action="settings">Project Settings</button>
-        <hr class="menu-separator">
-        <button class="menu-item" data-action="export">Export Amiga</button>
-        <button class="menu-item" data-action="preview">Preview Export</button>
-      </div>
-    </div>
-    <div class="menu-dropdown">
       <button class="menu-title">View</button>
       <div class="menu-dropdown-content">
         <button class="menu-item" data-action="tab-tiled-viewer">Tiled Viewer</button>
@@ -34,54 +22,6 @@
   <div id="top-bar">
     <button id="tab-tiled-viewer" class="tab-btn active">Tiled Viewer</button>
     <button id="tab-png-iff" class="tab-btn">PNG → IFF Converter</button>
-    <span id="project-name" class="project-name clickable" title="Click to rename project">— no project —</span>
-    <input id="project-name-input" class="project-name-input hidden" type="text">
-  </div>
-
-  <!-- ===== HIDDEN: Level editor DOM elements (kept to satisfy renderer.ts lookups) ===== -->
-  <div style="display:none;" aria-hidden="true">
-    <div id="tab-content-level-editor">
-      <canvas id="map-canvas"></canvas>
-      <canvas id="tiles-canvas"></canvas>
-      <span id="active-tile-id"></span>
-      <div id="flags-column"></div>
-      <input type="checkbox" id="chk-bits-on-map">
-      <input type="range" id="tile-size-slider">
-      <span id="tile-size-value"></span>
-      <div id="map-tabs"></div>
-      <span id="map-dims"></span>
-      <span id="tilesheet-dims"></span>
-      <div id="new-project-overlay" class="hidden"><div id="new-project-title"></div><button id="btn-modal-create"></button><button id="btn-modal-save-settings" class="hidden"></button></div>
-      <div id="rename-map-overlay" class="hidden"><input id="input-rename-map"><span id="rename-map-label"></span></div>
-      <div id="delete-map-overlay" class="hidden"><span id="delete-map-message"></span></div>
-      <div id="file-browser-overlay" class="hidden"><span id="fb-current-path"></span><div id="fb-list"></div><button id="btn-fb-open"></button></div>
-      <div id="amiga-preview-overlay" class="hidden"><span id="iff-info"></span><span id="map-info"></span><canvas id="iff-preview-canvas"></canvas><textarea id="ab3-preview"></textarea><textarea id="ab3-bin-preview"></textarea><textarea id="ab3-player-preview"></textarea></div>
-      <!-- modal elements -->
-      <button id="btn-pick-folder"></button>
-      <button id="btn-pick-png"></button>
-      <span id="folder-path"></span>
-      <span id="png-file-name"></span>
-      <input type="text" id="input-project-name">
-      <input type="text" id="input-map-name">
-      <input type="range" id="modal-bitplanes">
-      <span id="modal-bp-label"></span>
-      <span id="modal-colors-label"></span>
-      <div id="modal-iff-preview-row">
-        <canvas id="modal-png-preview-canvas"></canvas>
-        <canvas id="modal-iff-preview-canvas"></canvas>
-      </div>
-      <button id="btn-modal-cancel"></button>
-      <button id="btn-rename-cancel"></button>
-      <button id="btn-rename-confirm"></button>
-      <button id="btn-delete-cancel"></button>
-      <button id="btn-delete-confirm"></button>
-      <button id="btn-fb-cancel"></button>
-      <button id="btn-preview-cancel"></button>
-      <button id="btn-preview-export"></button>
-      <button id="btn-modal-save-settings"></button>
-      <!-- Hidden tab-level-editor button -->
-      <button id="tab-level-editor"></button>
-    </div>
   </div>
 
   <!-- ===== TAB 1: TILED VIEWER ===== -->
@@ -119,7 +59,7 @@
   <div id="tab-content-png-iff" class="tab-content">
     <div class="converter-panel">
       <h2 class="panel-title">PNG → IFF Converter</h2>
-      <p class="hint">Convert a 1‑bit (monochrome) PNG tilesheet to Amiga IFF/ILBM format with 1 bitplane.</p>
+      <p class="hint">Convert a PNG tilesheet to Amiga IFF/ILBM format with configurable bitplanes and color quantization.</p>
 
       <div class="converter-form">
         <div class="form-group">
@@ -171,18 +111,6 @@
 
   <script src="assets/jszip.min.js"></script>
   <script src="renderer.js"></script>
-  <script type="importmap">
-    {
-      "imports": {
-        "lit": "./node_modules/lit/index.js",
-        "lit/": "./node_modules/lit/",
-        "@lit/reactive-element": "./node_modules/@lit/reactive-element/reactive-element.js",
-        "lit-element/lit-element.js": "./node_modules/lit-element/lit-element.js",
-        "lit-html": "./node_modules/lit-html/lit-html.js",
-        "lit-html/": "./node_modules/lit-html/"
-      }
-    }
-  </script>
-  <script type="module" src="tiled-viewer.js"></script>
+  <script src="tiled-viewer.js"></script>
 </body>
 </html>

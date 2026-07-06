@@ -2,40 +2,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const api = {
-    tileSize: 16,
-    scale: 2,
-    tilesheetCols: 20,
-    tilesheetRows: 20,
-    mapCols: 20,
-    mapRows: 16,
-    /** Open a file dialog to pick a PNG tilesheet. Returns { dataUrl, fileName } or null. */
     pickPng: () => electron_1.ipcRenderer.invoke('pick-png'),
-    /** Open a folder dialog to pick where to create the project. Returns path or null. */
     pickFolder: (defaultPath) => electron_1.ipcRenderer.invoke('pick-folder', defaultPath),
-    /** Open a save-file dialog for IFF export. Returns path or null. */
     saveIffDialog: (defaultName) => electron_1.ipcRenderer.invoke('save-iff-dialog', defaultName),
-    /** Write raw byte array to a file. */
     writeFile: (filePath, data) => electron_1.ipcRenderer.invoke('write-file', filePath, data),
-    /** Create a new project: folder + copied PNG + .project file. Returns the project folder path or null. */
-    createProject: (data) => electron_1.ipcRenderer.invoke('create-project', data),
-    /** Save the project file at the known folder path. */
-    saveProjectFile: (data) => electron_1.ipcRenderer.invoke('save-project-file', data),
-    /** Check if the amiga/ subfolder contains exported files. */
-    checkAmigaExport: (projectFolder) => electron_1.ipcRenderer.invoke('check-amiga-export', projectFolder),
-    /** Read a PNG file from disk and return it as a data URL. */
-    loadPngFile: (filePath) => electron_1.ipcRenderer.invoke('load-png-file', filePath),
-    /** Export Amiga files (tiles.iff, maps.ab3, game.ab3, player.ab3) to the amiga/ subfolder. */
-    exportAmiga: (data) => electron_1.ipcRenderer.invoke('export-amiga', data),
-    /** Read a text file from disk (for TMX/TSX files). */
     readTextFile: (filePath) => electron_1.ipcRenderer.invoke('read-text-file', filePath),
-    /** List a directory for the custom file browser. */
+    loadPngFile: (filePath) => electron_1.ipcRenderer.invoke('load-png-file', filePath),
     listDirectory: (dirPath) => electron_1.ipcRenderer.invoke('list-directory', dirPath),
-    /** Load a project file at a specific path (for custom file browser). */
-    loadProjectFile: (filePath) => electron_1.ipcRenderer.invoke('load-project-file', filePath),
-    /** Load a .project project file via native dialog. Returns { projectFolder, projectName, data } or null. */
-    loadProject: (defaultPath) => electron_1.ipcRenderer.invoke('load-project', defaultPath),
-    /** Open a dialog to load a previously exported map JSON. */
-    loadMapJson: () => electron_1.ipcRenderer.invoke('load-map-json')
+    exportAmiga: (data) => electron_1.ipcRenderer.invoke('export-amiga', data)
 };
 electron_1.contextBridge.exposeInMainWorld('editorApi', api);
 //# sourceMappingURL=preload.js.map
