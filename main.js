@@ -167,18 +167,18 @@ electron_1.ipcMain.handle('save-project-file', async (_event, data) => {
         return false;
     }
 });
-/** Export Amiga files (tiles.iff, map.bin, LoadMap.ab3, LoadMapBin.ab3) to the project's amiga/ subfolder. */
+/** Export Amiga files (tiles.iff, maps.ab3, game.ab3, player.ab3) to the project's amiga/ subfolder. */
 electron_1.ipcMain.handle('export-amiga', async (_event, data) => {
     if (!isSafePath(data.projectFolder))
         return false;
     try {
         const amigaDir = path.join(data.projectFolder, 'amiga');
         fs.mkdirSync(amigaDir, { recursive: true });
-        // ab3Data / ab3BinData are already normalized to LF line endings and ASCII-sanitized in the renderer.
+        // ab3 bytes are already normalized to LF line endings and ASCII-sanitized in the renderer.
         fs.writeFileSync(path.join(amigaDir, 'tiles.iff'), Buffer.from(data.iffData));
-        fs.writeFileSync(path.join(amigaDir, 'map.bin'), Buffer.from(data.mapBinData));
-        fs.writeFileSync(path.join(amigaDir, 'LoadMap.ab3'), Buffer.from(data.ab3Data));
-        fs.writeFileSync(path.join(amigaDir, 'LoadMapBin.ab3'), Buffer.from(data.ab3BinData));
+        fs.writeFileSync(path.join(amigaDir, 'maps.ab3'), Buffer.from(data.mapsAb3Data));
+        fs.writeFileSync(path.join(amigaDir, 'game.ab3'), Buffer.from(data.gameAb3Data));
+        fs.writeFileSync(path.join(amigaDir, 'player.ab3'), Buffer.from(data.playerAb3Data));
         return true;
     }
     catch (err) {
@@ -192,7 +192,7 @@ electron_1.ipcMain.handle('check-amiga-export', async (_event, projectFolder) =>
         const amigaDir = path.join(projectFolder, 'amiga');
         if (!fs.existsSync(amigaDir))
             return false;
-        const files = ['tiles.iff', 'map.bin', 'LoadMap.ab3', 'LoadMapBin.ab3'];
+        const files = ['tiles.iff', 'maps.ab3', 'game.ab3', 'player.ab3'];
         return files.every(f => fs.existsSync(path.join(amigaDir, f)));
     }
     catch {

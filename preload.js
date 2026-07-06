@@ -24,7 +24,7 @@ const api = {
     checkAmigaExport: (projectFolder) => electron_1.ipcRenderer.invoke('check-amiga-export', projectFolder),
     /** Read a PNG file from disk and return it as a data URL. */
     loadPngFile: (filePath) => electron_1.ipcRenderer.invoke('load-png-file', filePath),
-    /** Export Amiga files (IFF, map.bin, .ab3) to the amiga/ subfolder. */
+    /** Export Amiga files (tiles.iff, maps.ab3, game.ab3, player.ab3) to the amiga/ subfolder. */
     exportAmiga: (data) => electron_1.ipcRenderer.invoke('export-amiga', data),
     /** List a directory for the custom file browser. */
     listDirectory: (dirPath) => electron_1.ipcRenderer.invoke('list-directory', dirPath),

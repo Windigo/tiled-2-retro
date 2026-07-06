@@ -99,9 +99,9 @@ declare const editorApi: {
   exportAmiga: (data: {
     projectFolder: string;
     iffData: number[];
-    mapBinData: number[];
-    ab3Data: number[];
-    ab3BinData: number[];
+    mapsAb3Data: number[];
+    gameAb3Data: number[];
+    playerAb3Data: number[];
   }) => Promise<boolean>;
   listDirectory: (dirPath: string) => Promise<{ path: string; folders: string[]; files: string[] } | null>;
   loadProjectFile: (filePath: string) => Promise<{
@@ -1085,34 +1085,6 @@ function putU32BE(buf: Uint8Array, offset: number, value: number): void {
   buf[offset + 3] = value & 0xFF;
 }
 
-function buildMapBinary(): Uint8Array {
-  const numMaps = maps.length;
-  if (numMaps === 0) return new Uint8Array(0);
-  const numTiles = getMaxTiles();
-  const mCols = gridMapCols();
-  const mRows = gridMapRows();
-  const cells = mCols * mRows;
-  const headerSize = 14;
-  const flagsSize = numTiles * 2;
-  const mapsSize = numMaps * cells * 2;
-  const totalSize = headerSize + flagsSize + mapsSize;
-  const buf = new Uint8Array(totalSize);
-  buf[0] = 0x41; buf[1] = 0x42; buf[2] = 0x33; buf[3] = 0x4D; // "AB3M"
-  putU16BE(buf, 4, 2);          // version 2 (multi-map)
-  putU16BE(buf, 6, numMaps);
-  putU16BE(buf, 8, mCols);      // shared by all maps
-  putU16BE(buf, 10, mRows);     // shared by all maps
-  putU16BE(buf, 12, numTiles);
-  let off = headerSize;
-  for (let i = 0; i < numTiles; i++) { putU16BE(buf, off, tileFlags[i] ?? 0); off += 2; }
-  for (let m = 0; m < numMaps; m++) {
-    const map = maps[m]?.map ?? [];
-    for (let r = 0; r < mRows; r++) {
-      for (let c = 0; c < mCols; c++) { putU16BE(buf, off, map[r]?.[c] ?? 0); off += 2; }
-    }
-  }
-  return buf;
-}
 
 function buildIffTilesheet(): Uint8Array {
   if (!tilesheet) throw new Error('No tilesheet loaded');
@@ -1199,7 +1171,114 @@ function buildIffTilesheet(): Uint8Array {
   return form;
 }
 
-function buildAmiBlitz3Loader(): string {
+// ─── Static AmiBlitz3 source files ──────────────────────────────────────────
+
+const PLAYER_AB3 = String.raw`; player.ab3
+; Speler struct, physics-routines en hulpfuncties voor AmiBlitz3
+;
+; Importeer via XINCLUDE "player.ab3" in game.ab3.
+
+; --------------------------------------------------------
+; Constanten (alleen integer-waarden toegestaan)
+; --------------------------------------------------------
+#JUMP_FORCE = 4
+#MAX_FALL   = 8
+
+; --------------------------------------------------------
+; Player NewType (struct)
+; --------------------------------------------------------
+NEWTYPE .PLAYER
+  x.w
+  y.w
+  speedX.q
+  speedY.q
+  gravity.q
+  isJumping.b
+  isFalling.b
+  isOnGround.b
+End NEWTYPE
+
+; Globale player variabele
+player.PLAYER
+
+; --------------------------------------------------------
+; InitPlayer{startX, startY}
+; --------------------------------------------------------
+Statement InitPlayer{startX.w, startY.w}
+  Shared player
+  player\x          = startX
+  player\y          = startY
+  player\speedX     = 0
+  player\speedY     = 0
+  player\gravity    = 0.3
+  player\isJumping  = 0
+  player\isFalling  = 0
+  player\isOnGround = 1
+End Statement
+
+; --------------------------------------------------------
+; PlayerJump{}
+; --------------------------------------------------------
+Statement PlayerJump{}
+  Shared player
+  If player\isOnGround = 1
+    player\speedY     = -#JUMP_FORCE
+    player\isJumping  = 1
+    player\isOnGround = 0
+    player\isFalling  = 0
+  End If
+End Statement
+
+; --------------------------------------------------------
+; UpdatePlayer{groundY}
+; --------------------------------------------------------
+Statement UpdatePlayer{groundY.w}
+  Shared player
+  If player\isOnGround = 0
+    player\speedY = player\speedY + player\gravity
+    If player\speedY > #MAX_FALL
+      player\speedY = #MAX_FALL
+    End If
+  End If
+  player\x = player\x + player\speedX
+  player\y = player\y + player\speedY
+  If player\y >= groundY
+    player\y          = groundY
+    player\speedY     = 0
+    player\isJumping  = 0
+    player\isFalling  = 0
+    player\isOnGround = 1
+  End If
+  If player\speedY > 0
+    If player\isOnGround = 0
+      player\isFalling = 1
+    End If
+  Else
+    player\isFalling = 0
+  End If
+End Statement
+
+; --------------------------------------------------------
+; SetPlayerSpeedX{spd}
+;   Stel horizontale snelheid in.
+; --------------------------------------------------------
+Statement SetPlayerSpeedX{spd.w}
+  Shared player
+  player\speedX = spd
+End Statement
+
+; --------------------------------------------------------
+; DrawPlayer{color, tileSize}
+;   Teken de speler als gevuld blok op BitMap 1.
+; --------------------------------------------------------
+Statement DrawPlayer{color.w, tileSize.w}
+  Shared player
+  Use BitMap 1
+  Boxf player\x, player\y, player\x + tileSize - 1, player\y + tileSize - 1, color
+End Statement
+`;
+
+function buildMapsAb3(): string {
   const mCols = gridMapCols();
   const mRows = gridMapRows();
   const cells = mCols * mRows;
@@ -1215,15 +1294,11 @@ function buildAmiBlitz3Loader(): string {
     ? maps.map((m, i) => `;   Map ${i}: ${m.name || '(unnamed)'}`).join('\n')
     : ';   Map 0: (unnamed)';
 
-  // AmiBlitz Data.w is a signed 16-bit word; values > 32767 (e.g. a tile flag
-  // using bit 15) must be written as their signed equivalent so the bit pattern
-  // is preserved when read back into a .w array.
   const toSignedWord = (v: number): number => {
     const u = v & 0xFFFF;
     return u >= 0x8000 ? u - 0x10000 : u;
   };
 
-  // Tile indices for every map, concatenated (map 0 first, row-major).
   const allGridVals: number[] = [];
   for (let m = 0; m < numMaps; m++) {
     const map = maps[m]?.map ?? [];
@@ -1237,70 +1312,76 @@ function buildAmiBlitz3Loader(): string {
   const flagChunks: string[] = [];
   for (let i = 0; i < maxTiles; i += 16) { flagChunks.push(`Data.w ${flagVals.slice(i, i + 16).join(',')}`); }
 
-  return `; --------------------------------------------------------------
-; RetroMap Map Loader
-; Generated by RetroMapEditor -- AmiBlitz3 source
-; --------------------------------------------------------------
-; Maps in this file (set curMap below to choose which one renders):
+  return `; ---------------------------------------------------------------
+; maps.ab3 -- Gegenereerd door RetroMapEditor
+; Map data, afmetingen en teken-routines
+; ---------------------------------------------------------------
+; Maps:
 ${mapComments}
 ;
-; Tile flag bits:
+; Tile vlag bits:
 ${bitComments}
-; --------------------------------------------------------------
+; ---------------------------------------------------------------
+
+#MAP_COLS   = ${mCols}
+#MAP_ROWS   = ${mRows}
+#NUM_MAPS   = ${numMaps}
+#TILE_SIZE  = ${ts}
+#SHEET_COLS = ${sheetCols}
+#MAX_TILES  = ${maxTiles}
+#SHEET_W    = ${imgW}
+#SHEET_H    = ${imgH}
+#BITPLANES  = ${bp}
 
 Dim tilemap.w(${numMaps * cells})
 Dim tileFlags.w(${maxTiles})
 
-curMap = 0   ; map to render, 0 to ${numMaps - 1}
+; ---------------------------------------------------------------
+; LoadMaps{}
+;   Lees alle map-data en tile-vlaggen vanuit de Data-labels.
+; ---------------------------------------------------------------
+Statement LoadMaps{}
+  Shared tilemap, tileFlags
+  Restore MapData
+  For i = 0 To ${numMaps * cells - 1}
+    Read tmp.w
+    tilemap(i) = tmp
+  Next i
+  Restore FlagData
+  For i = 0 To ${maxTiles - 1}
+    Read tmp.w
+    tileFlags(i) = tmp
+  Next i
+End Statement
 
-BitMap 0, ${imgW}, ${imgH}, ${bp}
-BitMap 1, ${mCols * ts}, ${mRows * ts}, ${bp}
-LoadBitMap 0, "tiles.iff", 0
-Use BitMap 0
-BLITZ
-Slice 0,44,${bp}
+; ---------------------------------------------------------------
+; DrawMap{mapIndex}
+;   Teken de opgegeven map naar BitMap 1.
+;   Vereist: BitMap 0 = tilesheet, BitMap 1 = doelscherm.
+; ---------------------------------------------------------------
+Statement DrawMap{mapIndex.w}
+  Shared tilemap
+  mapBase = mapIndex * ${cells}
+  For y = 0 To #MAP_ROWS - 1
+    For x = 0 To #MAP_COLS - 1
+      idx    = mapBase + y * #MAP_COLS + x
+      tile.w = tilemap(idx)
+      srcX.w = (tile MOD #SHEET_COLS) * #TILE_SIZE
+      srcY.w = tile / #SHEET_COLS
+      srcY   = srcY * #TILE_SIZE
+      dstX   = x * #TILE_SIZE
+      dstY   = y * #TILE_SIZE
+      Use BitMap 0
+      GetaShape 0, srcX, srcY, #TILE_SIZE, #TILE_SIZE
+      Use BitMap 1
+      Blit 0, dstX, dstY
+    Next x
+  Next y
+End Statement
 
-Restore MapData
-For i = 0 To ${numMaps * cells - 1}
-  Read tmp.w
-  tilemap(i) = tmp
-Next i
-
-Restore FlagData
-For i = 0 To ${maxTiles - 1}
-  Read tmp.w
-  tileFlags(i) = tmp
-Next i
-
-Use Palette 0
-Show 1
-
-Use BitMap 1
-Cls 0
-
-mapBase = curMap * ${cells}
-For y = 0 To ${mRows - 1}
-  For x = 0 To ${mCols - 1}
-    idx   = mapBase + y * ${mCols} + x
-    tile.w  = tilemap(idx)
-    srcX.w  = (tile MOD ${sheetCols}) * ${ts}
-    srcY.w  = tile / ${sheetCols}
-    srcY  = srcY * ${ts}
-    dstX  = x * ${ts}
-    dstY  = y * ${ts}
-    Use BitMap 0
-    GetaShape 0, srcX, srcY, ${ts}, ${ts}
-    Use BitMap 1
-    Blit 0, dstX, dstY
-  Next x
-Next y
-
-While Joyb(0) = 0
-  VWait
-Wend
-
-End
-
+; ---------------------------------------------------------------
+; Map data (gegenereerd)
+; ---------------------------------------------------------------
 .MapData:
 ${gridDataLines.join('\n')}
 
@@ -1309,114 +1390,79 @@ ${flagChunks.join('\n')}
 `;
 }
 
-// Loader variant that reads the tile indices and flags from the binary
-// "map.bin" (AB3M v2) at runtime instead of embedding them as Data.w. Only the
-// display geometry stays as compile-time constants; all map content comes from
-// the file, read as native big-endian 16-bit words via OpenFile/Fields/Get.
-function buildAmiBlitz3BinLoader(): string {
+function buildGameAb3(): string {
   const mCols = gridMapCols();
   const mRows = gridMapRows();
-  const cells = mCols * mRows;
-  const numMaps = Math.max(1, maps.length);
+  const ts = gridTileSize;
+  const bp = convBitplanes;
   const imgW = CONFIG.imgW;
   const imgH = CONFIG.imgH;
-  const ts = gridTileSize;
-  const sheetCols = gridSheetCols();
-  const maxTiles = getMaxTiles();
-  const bp = convBitplanes;
-  const bitComments = bitsConfig.bits.map((b, i) => `;   Bit ${i}: ${b.name || '(unused)'}`).join('\n');
-  const mapComments = maps.length
-    ? maps.map((m, i) => `;   Map ${i}: ${m.name || '(unnamed)'}`).join('\n')
-    : ';   Map 0: (unnamed)';
+  const mapW = mCols * ts;
+  const mapH = mRows * ts;
+  const groundY = mapH - ts;
 
-  return `; --------------------------------------------------------------
-; RetroMap Map Loader (reads map.bin at runtime)
-; Generated by RetroMapEditor -- AmiBlitz3 source
-; --------------------------------------------------------------
-; This loader reads the tile indices and flags from the binary file
-; "map.bin" (AB3M v2 format) instead of embedding them as Data statements.
-; Keep map.bin and tiles.iff next to this program (same drawer).
+  return `; ---------------------------------------------------------------
+; game.ab3 -- Gegenereerd door RetroMapEditor
+; Hoofdprogramma: setup, input en gameloop
 ;
-; Maps stored in map.bin (set curMap below to choose which one renders):
-${mapComments}
-;
-; Tile flag bits:
-${bitComments}
-; --------------------------------------------------------------
+; Vereiste bestanden (in dezelfde AmigaDOS drawer):
+;   tiles.iff  - tilesheet (IFF/ILBM)
+;   maps.ab3   - map data (gegenereerd door RetroMapEditor)
+;   player.ab3 - speler struct en physics
+; ---------------------------------------------------------------
 
-Dim tilemap.w(${cells})
-Dim tileFlags.w(${maxTiles})
+XINCLUDE "player.ab3"
+XINCLUDE "maps.ab3"
 
-curMap = 0   ; map to render, 0 to ${numMaps - 1}
-
-; --- Open the binary map file ---------------------------------
-If OpenFile(0, "map.bin") = 0
-  End   ; map.bin not found
-EndIf
-
-; --- Read the 14-byte header (7 words) ------------------------
-Fields 0, hMagic1.w, hMagic2.w, hVersion.w, hNumMaps.w, hMCols.w, hMRows.w, hNumTiles.w
-Get 0, 0
-
-; Bail out if this is not an "AB3M" version 2 file
-If hMagic1 <> $4142 OR hMagic2 <> $334D OR hVersion <> 2
-  CloseFile 0
-  End
-EndIf
-
-numTiles.w = hNumTiles
-
-; --- Switch to single-word records for the rest ---------------
-Fields 0, wd.w
-
-; --- Read tile flags (they start at word 7) -------------------
-For i = 0 To numTiles - 1
-  Get 0, 7 + i
-  tileFlags(i) = wd
-Next i
-
-; --- Read the selected map (stored right after the flags) -----
-mapStart = 7 + numTiles
-mapBase  = mapStart + curMap * ${cells}
-For i = 0 To ${cells - 1}
-  Get 0, mapBase + i
-  tilemap(i) = wd
-Next i
-
-CloseFile 0
-
-; --- Set up the display ---------------------------------------
+; ---------------------------------------------------------------
+; Setup (LoadBitMap vereist Amiga mode, dus voor BLITZ)
+; ---------------------------------------------------------------
 BitMap 0, ${imgW}, ${imgH}, ${bp}
-BitMap 1, ${mCols * ts}, ${mRows * ts}, ${bp}
+BitMap 1, ${mapW}, ${mapH}, ${bp}
+
 LoadBitMap 0, "tiles.iff", 0
-Use BitMap 0
+VWait 100
+
 BLITZ
-Slice 0,44,${bp}
+Slice 0, 44, ${bp}
+Use BitMap 0
 Use Palette 0
 Show 1
 
-; --- Draw the map ---------------------------------------------
-Use BitMap 1
-Cls 0
-For y = 0 To ${mRows - 1}
-  For x = 0 To ${mCols - 1}
-    idx   = y * ${mCols} + x
-    tile.w  = tilemap(idx)
-    srcX.w  = (tile MOD ${sheetCols}) * ${ts}
-    srcY.w  = tile / ${sheetCols}
-    srcY  = srcY * ${ts}
-    dstX  = x * ${ts}
-    dstY  = y * ${ts}
-    Use BitMap 0
-    GetaShape 0, srcX, srcY, ${ts}, ${ts}
-    Use BitMap 1
-    Blit 0, dstX, dstY
-  Next x
-Next y
+; ---------------------------------------------------------------
+; Map laden en speler initialiseren
+; ---------------------------------------------------------------
+LoadMaps{}
+InitPlayer{16, 16}
+DrawMap{0}
 
-While Joyb(0) = 0
+groundY.w = ${groundY}
+
+; ---------------------------------------------------------------
+; Game loop (ESC om te stoppen)
+; ---------------------------------------------------------------
+Repeat
   VWait
-Wend
+
+  ; Joystick-input (poort 1)
+  joy = Joy(1)
+  If joy AND 4
+    SetPlayerSpeedX{-2}
+  ElseIf joy AND 8
+    SetPlayerSpeedX{2}
+  Else
+    SetPlayerSpeedX{0}
+  End If
+
+  If Fire(1) Then PlayerJump{}
+
+  UpdatePlayer{groundY}
+
+  DrawMap{0}
+  DrawPlayer{1, ${ts}}
+
+  Show 1
+Until RawStatus($45)
 
 End
 `;
@@ -1440,9 +1486,9 @@ function stringToAmigaBytes(str: string): Uint8Array {
 // ─── Amiga export preview & export ────────────────────────────────────────────
 
 let cachedPreviewIff: Uint8Array | null = null;
-let cachedPreviewMapBin: Uint8Array | null = null;
-let cachedPreviewAb3Bytes: Uint8Array | null = null;
-let cachedPreviewAb3BinBytes: Uint8Array | null = null;
+let cachedMapsAb3Bytes: Uint8Array | null = null;
+let cachedGameAb3Bytes: Uint8Array | null = null;
+let cachedPlayerAb3Bytes: Uint8Array | null = null;
 let hasExportData = false;
 
 const previewBtn = document.getElementById('tab-level-editor') as HTMLButtonElement;
@@ -1454,16 +1500,15 @@ function setPreviewEnabled(enabled: boolean): void {
 function showAmigaPreview(): void {
   if (!projectLoaded || !tilesheet || !currentProjectPath) { showToast('No project loaded', 'error'); return; }
   cachedPreviewIff = buildIffTilesheet();
-  cachedPreviewMapBin = buildMapBinary();
-  const ab3raw = buildAmiBlitz3Loader();
-  cachedPreviewAb3Bytes = stringToAmigaBytes(ab3raw);
-  cachedPreviewAb3BinBytes = stringToAmigaBytes(buildAmiBlitz3BinLoader());
+  const mapsAb3raw = buildMapsAb3();
+  cachedMapsAb3Bytes = stringToAmigaBytes(mapsAb3raw);
+  const gameAb3raw = buildGameAb3();
+  cachedGameAb3Bytes = stringToAmigaBytes(gameAb3raw);
+  cachedPlayerAb3Bytes = stringToAmigaBytes(PLAYER_AB3);
   const imgW = CONFIG.imgW;
   const imgH = CONFIG.imgH;
-  document.getElementById('iff-info')!.textContent = `${imgW}×${imgH} px, ${formatSize(cachedPreviewIff.length)}`;
-  const mCols = gridMapCols();
-  const mRows = gridMapRows();
-  document.getElementById('map-info')!.textContent = `${mCols}×${mRows} tiles, ${formatSize(cachedPreviewMapBin.length)}`;
+  document.getElementById('iff-info')!.textContent = `${imgW}\u00d7${imgH} px, ${formatSize(cachedPreviewIff.length)}`;
+  document.getElementById('map-info')!.textContent = `maps.ab3 ${formatSize(cachedMapsAb3Bytes.length)}`;
   const iffCanvas = document.getElementById('iff-preview-canvas') as HTMLCanvasElement;
   const maxDim = 240;
   const scale = Math.min(maxDim / imgW, maxDim / imgH, 1);
@@ -1472,21 +1517,22 @@ function showAmigaPreview(): void {
   const iffCtx = iffCanvas.getContext('2d')!;
   iffCtx.imageSmoothingEnabled = false;
   iffCtx.drawImage(tilesheet!, 0, 0, iffCanvas.width, iffCanvas.height);
-  (document.getElementById('ab3-preview') as HTMLTextAreaElement).value = buildAmiBlitz3Loader();
-  (document.getElementById('ab3-bin-preview') as HTMLTextAreaElement).value = buildAmiBlitz3BinLoader();
+  (document.getElementById('ab3-preview') as HTMLTextAreaElement).value = mapsAb3raw;
+  (document.getElementById('ab3-bin-preview') as HTMLTextAreaElement).value = gameAb3raw;
+  (document.getElementById('ab3-player-preview') as HTMLTextAreaElement).value = PLAYER_AB3;
   document.getElementById('amiga-preview-overlay')!.classList.remove('hidden');
 }
 
 function formatSize(bytes: number): string { return bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB'; }
 
 async function doExportAmiga(): Promise<void> {
-  if (!cachedPreviewIff || !cachedPreviewMapBin || !cachedPreviewAb3Bytes || !cachedPreviewAb3BinBytes) { showToast('Nothing to export', 'error'); return; }
+  if (!cachedPreviewIff || !cachedMapsAb3Bytes || !cachedGameAb3Bytes || !cachedPlayerAb3Bytes) { showToast('Nothing to export', 'error'); return; }
   const success = await editorApi.exportAmiga({
     projectFolder: currentProjectPath,
     iffData: Array.from(cachedPreviewIff),
-    mapBinData: Array.from(cachedPreviewMapBin),
-    ab3Data: Array.from(cachedPreviewAb3Bytes),
-    ab3BinData: Array.from(cachedPreviewAb3BinBytes)
+    mapsAb3Data: Array.from(cachedMapsAb3Bytes),
+    gameAb3Data: Array.from(cachedGameAb3Bytes),
+    playerAb3Data: Array.from(cachedPlayerAb3Bytes)
   });
   if (success) { setPreviewEnabled(true); showToast('Exported to amiga', 'success'); document.getElementById('amiga-preview-overlay')!.classList.add('hidden'); }
   else showToast('Export failed', 'error');
@@ -1704,13 +1750,14 @@ document.getElementById('btn-fb-open')!.addEventListener('click', async () => {
 document.getElementById('btn-preview-cancel')!.addEventListener('click', () => document.getElementById('amiga-preview-overlay')!.classList.add('hidden'));
 document.getElementById('btn-preview-export')!.addEventListener('click', () => doExportAmiga());
 
-// Switch between the embedded (LoadMap.ab3) and binary (LoadMapBin.ab3) source previews.
+// Switch between maps.ab3, game.ab3 and player.ab3 source previews.
 document.querySelectorAll<HTMLButtonElement>('.preview-tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const target = btn.dataset.ab3tab;
     document.querySelectorAll('.preview-tab-btn').forEach(b => b.classList.toggle('active', b === btn));
-    document.getElementById('ab3-preview')!.classList.toggle('hidden', target !== 'embedded');
-    document.getElementById('ab3-bin-preview')!.classList.toggle('hidden', target !== 'bin');
+    document.getElementById('ab3-preview')!.classList.toggle('hidden', target !== 'maps');
+    document.getElementById('ab3-bin-preview')!.classList.toggle('hidden', target !== 'game');
+    document.getElementById('ab3-player-preview')!.classList.toggle('hidden', target !== 'player');
   });
 });
 
