@@ -1093,7 +1093,7 @@ player.PLAYER
 ; InitPlayer{startX, startY}
 ; --------------------------------------------------------
 Statement InitPlayer{startX.w, startY.w}
-  Shared player
+  SHARED player
   player\x          = startX
   player\y          = startY
   player\speedX     = 0
@@ -1108,7 +1108,7 @@ End Statement
 ; PlayerJump{}
 ; --------------------------------------------------------
 Statement PlayerJump{}
-  Shared player
+  SHARED player
   If player\isOnGround = 1
     player\speedY     = -#JUMP_FORCE
     player\isJumping  = 1
@@ -1121,7 +1121,7 @@ End Statement
 ; UpdatePlayer{groundY}
 ; --------------------------------------------------------
 Statement UpdatePlayer{groundY.w}
-  Shared player
+  SHARED player
   If player\isOnGround = 0
     player\speedY = player\speedY + player\gravity
     If player\speedY > #MAX_FALL
@@ -1151,7 +1151,7 @@ End Statement
 ;   Stel horizontale snelheid in.
 ; --------------------------------------------------------
 Statement SetPlayerSpeedX{spd.w}
-  Shared player
+  SHARED player
   player\speedX = spd
 End Statement
 
@@ -1160,7 +1160,7 @@ End Statement
 ;   Teken de speler als gevuld blok op BitMap 1.
 ; --------------------------------------------------------
 Statement DrawPlayer{color.w, tileSize.w}
-  Shared player
+  SHARED player
   Use BitMap 1
   Boxf player\x, player\y, player\x + tileSize - 1, player\y + tileSize - 1, color
 End Statement
@@ -1233,7 +1233,7 @@ Dim tileFlags.w(${maxTiles})
 ;   Lees alle map-data en tile-vlaggen vanuit de Data-labels.
 ; ---------------------------------------------------------------
 Statement LoadMaps{}
-  Shared tilemap, tileFlags
+  SHARED tilemap, tileFlags
   Restore MapData
   For i = 0 To ${numMaps * cells - 1}
     Read tmp.w
@@ -1252,7 +1252,7 @@ End Statement
 ;   Vereist: BitMap 0 = tilesheet, BitMap 1 = doelscherm.
 ; ---------------------------------------------------------------
 Statement DrawMap{mapIndex.w}
-  Shared tilemap
+  SHARED tilemap
   mapBase = mapIndex * ${cells}
   For y = 0 To #MAP_ROWS - 1
     For x = 0 To #MAP_COLS - 1
@@ -2065,6 +2065,238 @@ btnConvertIff.addEventListener('click', async () => {
     else
         showToast('Failed to save IFF', 'error');
 });
+function buildTiledIff(img, nPlanes) {
+    const w = img.width;
+    const h = img.height;
+    const bytesPerRow = ((w + 15) >> 4) << 1;
+    const maxColors = 1 << nPlanes;
+    const tmp = document.createElement('canvas');
+    tmp.width = w;
+    tmp.height = h;
+    const ctx = tmp.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const rgb = imageData.data;
+    const quant = frequencyQuantize(rgb, maxColors);
+    const palette = quant.palette;
+    const indexMap = quant.indexMap;
+    const body = new Uint8Array(h * nPlanes * bytesPerRow);
+    for (let y = 0; y < h; y++) {
+        for (let plane = 0; plane < nPlanes; plane++) {
+            const planeRowOff = (y * nPlanes + plane) * bytesPerRow;
+            for (let x = 0; x < w; x++) {
+                const idx = indexMap[y * w + x];
+                if (idx & (1 << plane)) {
+                    const byteIdx = x >> 3;
+                    const bitIdx = 7 - (x & 7);
+                    body[planeRowOff + byteIdx] |= (1 << bitIdx);
+                }
+            }
+        }
+    }
+    const cmapLen = maxColors * 3;
+    const cmap = new Uint8Array(cmapLen);
+    cmap.set(palette);
+    function iffChunk(type, data) {
+        const padded = data.length + (data.length & 1);
+        const out = new Uint8Array(8 + padded);
+        for (let i = 0; i < 4; i++)
+            out[i] = type.charCodeAt(i);
+        putU32BE(out, 4, data.length);
+        out.set(data, 8);
+        return out;
+    }
+    const bmhd = new Uint8Array(20);
+    putU16BE(bmhd, 0, w);
+    putU16BE(bmhd, 2, h);
+    putU16BE(bmhd, 4, 0);
+    putU16BE(bmhd, 6, 0);
+    bmhd[8] = nPlanes;
+    bmhd[9] = 0;
+    bmhd[10] = 0;
+    bmhd[11] = 0;
+    putU16BE(bmhd, 12, 0);
+    bmhd[14] = 44;
+    bmhd[15] = 52;
+    putU16BE(bmhd, 16, w);
+    putU16BE(bmhd, 18, h);
+    const bmhdChunk = iffChunk('BMHD', bmhd);
+    const cmapChunk = iffChunk('CMAP', cmap);
+    const bodyChunk = iffChunk('BODY', body);
+    const ilbmInner = new Uint8Array(4 + bmhdChunk.length + cmapChunk.length + bodyChunk.length);
+    let p = 0;
+    ilbmInner.set([0x49, 0x4C, 0x42, 0x4D], p);
+    p += 4;
+    ilbmInner.set(bmhdChunk, p);
+    p += bmhdChunk.length;
+    ilbmInner.set(cmapChunk, p);
+    p += cmapChunk.length;
+    ilbmInner.set(bodyChunk, p);
+    const form = new Uint8Array(8 + ilbmInner.length);
+    form.set([0x46, 0x4F, 0x52, 0x4D], 0);
+    putU32BE(form, 4, ilbmInner.length);
+    form.set(ilbmInner, 8);
+    return form;
+}
+function parseTiledLayers(mapJson) {
+    const layers = [];
+    for (let i = 0; i < mapJson.layers.length; i++) {
+        const l = mapJson.layers[i];
+        if (l.type !== 'tilelayer')
+            continue;
+        // Determine collision type from custom properties
+        let collision = 0;
+        if (l.properties) {
+            for (const prop of l.properties) {
+                if (prop.name === 'collision' || prop.name === 'col') {
+                    const v = prop.value;
+                    if (typeof v === 'number')
+                        collision = v;
+                    else if (typeof v === 'string') {
+                        const lower = v.toLowerCase();
+                        if (lower === 'solid' || lower === 'wall' || lower === 'platform')
+                            collision = 1;
+                        else if (lower === 'pickup' || lower === 'item' || lower === 'collectible')
+                            collision = 2;
+                        else if (lower === 'hazard' || lower === 'enemy' || lower === 'spike')
+                            collision = 3;
+                        else
+                            collision = parseInt(v) || 0;
+                    }
+                }
+            }
+        }
+        // Guess collision from layer name as fallback
+        if (collision === 0 && (l.name || '').toLowerCase().includes('solid'))
+            collision = 1;
+        if (collision === 0 && (l.name || '').toLowerCase().includes('wall'))
+            collision = 1;
+        if (collision === 0 && (l.name || '').toLowerCase().includes('pickup'))
+            collision = 2;
+        if (collision === 0 && (l.name || '').toLowerCase().includes('hazard'))
+            collision = 3;
+        if (collision === 0 && (l.name || '').toLowerCase().includes('spike'))
+            collision = 3;
+        if (collision === 0 && (l.name || '').toLowerCase().includes('enemy'))
+            collision = 3;
+        layers.push({
+            name: l.name || `Layer_${i}`,
+            index: i,
+            collision,
+            tileData: [...(l.data || [])],
+            width: l.width || mapJson.width,
+            height: l.height || mapJson.height
+        });
+    }
+    return layers;
+}
+function buildTiledMapAb3(mapJson) {
+    const mapCols = mapJson.width;
+    const mapRows = mapJson.height;
+    const tileSize = mapJson.tilewidth;
+    const cells = mapCols * mapRows;
+    // Flatten all tile layers into a single tile array (GID → 0-based)
+    // Layer 0 drawn first, higher layers drawn on top
+    const allTiles = [];
+    for (let y = 0; y < mapRows; y++) {
+        for (let x = 0; x < mapCols; x++) {
+            let tile = 0;
+            for (const layer of mapJson.layers) {
+                if (layer.type !== 'tilelayer' || !layer.data)
+                    continue;
+                const gid = layer.data[y * layer.width + x];
+                if (!gid || gid === 0)
+                    continue;
+                // Convert GID (1-based) to 0-based tile index
+                let bestGid = 0;
+                for (const ts of (mapJson.tilesets || [])) {
+                    if (ts.firstgid <= gid && ts.firstgid > bestGid)
+                        bestGid = ts.firstgid;
+                }
+                tile = gid - bestGid;
+            }
+            allTiles.push(tile);
+        }
+    }
+    const dataLines = [];
+    for (let i = 0; i < allTiles.length; i += 16) {
+        dataLines.push(`Data.w ${allTiles.slice(i, i + 16).join(',')}`);
+    }
+    const ts0 = mapJson.tilesets?.[0];
+    const sheetW = ts0?.imagewidth || 320;
+    const sheetH = ts0?.imageheight || 256;
+    const sheetCols = Math.max(1, Math.floor(sheetW / tileSize));
+    const bp = 4;
+    return `; ---------------------------------------------------------------
+; map.ab3 -- Tiled map export via RetroMapEditor
+; Draw-only: laadt tiles.iff en tekent de map
+; ---------------------------------------------------------------
+
+#MAP_COLS   = ${mapCols}
+#MAP_ROWS   = ${mapRows}
+#TILE_SIZE  = ${tileSize}
+#CELLS      = ${cells}
+#SHEET_COLS = ${sheetCols}
+#SHEET_W    = ${sheetW}
+#SHEET_H    = ${sheetH}
+#BITPLANES  = ${bp}
+
+Dim tilemap.w(${cells})
+
+; --- Load map data ---
+Restore MapData
+For i = 0 To ${cells - 1}
+  Read tilemap(i)
+Next i
+
+; --- Setup (Amiga mode) ---
+BitMap 0, ${sheetW}, ${sheetH}, #BITPLANES
+BitMap 1, ${mapCols * tileSize}, ${mapRows * tileSize}, #BITPLANES
+
+LoadBitMap 0, "tiles.iff", 0
+VWait 100
+
+BLITZ
+Slice 0, 44, #BITPLANES
+Use BitMap 0
+Use Palette 0
+Show 1
+
+; --- Teken de map ---
+For y = 0 To #MAP_ROWS - 1
+  For x = 0 To #MAP_COLS - 1
+    idx    = y * #MAP_COLS + x
+    tile.w = tilemap(idx)
+    If tile = 0 Then Goto skipTile
+    srcX.w = (tile MOD #SHEET_COLS) * #TILE_SIZE
+    srcY.w = tile / #SHEET_COLS
+    srcY   = srcY * #TILE_SIZE
+    dstX   = x * #TILE_SIZE
+    dstY   = y * #TILE_SIZE
+    Use BitMap 0
+    GetaShape 0, srcX, srcY, #TILE_SIZE, #TILE_SIZE
+    Use BitMap 1
+    Blit 0, dstX, dstY
+    .skipTile:
+  Next x
+Next y
+
+Show 1
+MouseWait
+AMIGA
+End
+
+.MapData:
+${dataLines.join('\n')}
+`;
+}
+function buildTiledGameAb3(layers, mapJson, bp) {
+    return buildTiledMapAb3(mapJson);
+}
+function buildTiledPlayerAb3() {
+    return `; player.ab3 (Tiled export) - not used, everything is in map.ab3
+`;
+}
 // ─── TILED VIEWER TAB (Google's suggested approach) ───────────────────────
 let tiledViewerInitialized = false;
 async function initTiledViewerTab() {
@@ -2098,6 +2330,71 @@ async function initTiledViewerTab() {
             currentZoom = Math.max(0.1, Math.min(4, currentZoom + (e.deltaY > 0 ? -0.1 : 0.1)));
             window.tiledSetZoom?.(currentZoom);
         });
+    // ── Tiled Export Amiga button ──
+    const exportBtn = document.getElementById('tiled-export-amiga');
+    async function doTiledExport() {
+        const exportData = window.tiledGetExportData?.();
+        if (!exportData) {
+            showToast('No map loaded for export', 'error');
+            return;
+        }
+        const { mapJson } = exportData;
+        if (!mapJson || !mapJson.layers) {
+            showToast('Invalid map data', 'error');
+            return;
+        }
+        // Parse layers with collision metadata
+        const layers = parseTiledLayers(mapJson);
+        // Build tilesheet IFF — load PNG from pngPath
+        const ts0 = mapJson.tilesets?.[0];
+        let imgW = ts0?.imagewidth || 320;
+        let imgH = ts0?.imageheight || 256;
+        let image = null;
+        if (exportData.pngPath) {
+            const dataUrl = await editorApi.loadPngFile(exportData.pngPath);
+            if (dataUrl) {
+                image = await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => { imgW = img.width; imgH = img.height; resolve(img); };
+                    img.onerror = () => resolve(null);
+                    img.src = dataUrl;
+                });
+            }
+        }
+        const bp = 4; // default 4 bitplanes, 16 colors
+        let iffData = null;
+        if (image) {
+            iffData = buildTiledIff(image, bp);
+        }
+        // Build .ab3 sources
+        const mapsAb3raw = buildTiledMapAb3(mapJson);
+        const mapsAb3Bytes = stringToAmigaBytes(mapsAb3raw);
+        const gameAb3raw = buildTiledGameAb3(layers, mapJson, bp);
+        const gameAb3Bytes = stringToAmigaBytes(gameAb3raw);
+        const playerAb3Bytes = stringToAmigaBytes(buildTiledPlayerAb3());
+        // Export to the folder where the JSON map lives
+        const exportFolder = mapList[currentMapIdx]?.jsonPath?.replace(/\/[^/]+$/, '') + '/amiga';
+        if (!currentFolder) {
+            showToast('No folder selected', 'error');
+            return;
+        }
+        const success = await editorApi.exportAmiga({
+            projectFolder: currentFolder,
+            iffData: iffData ? Array.from(iffData) : [],
+            mapsAb3Data: Array.from(mapsAb3Bytes),
+            gameAb3Data: Array.from(gameAb3Bytes),
+            playerAb3Data: Array.from(playerAb3Bytes)
+        });
+        if (success) {
+            showToast(`Exported to amiga/ in ${currentFolder}`, 'success');
+        }
+        else {
+            showToast('Export failed', 'error');
+        }
+    }
+    if (exportBtn) {
+        exportBtn.addEventListener('click', doTiledExport);
+    }
     if (!browseBtn || !canvas)
         return;
     let currentFolder = '';
@@ -2213,6 +2510,9 @@ async function initTiledViewerTab() {
         // Call renderTiledMap from tiled-viewer.js
         if (window.renderTiledMap) {
             await window.renderTiledMap(mapJson, pngPath, canvas);
+            // Enable export button once map is loaded
+            if (exportBtn)
+                exportBtn.disabled = false;
         }
     }
 }

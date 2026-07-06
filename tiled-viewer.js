@@ -4,6 +4,18 @@
  */
 let currentState = null;
 let visibleLayers = [];
+// Export accessor for renderer.ts
+window.tiledGetExportData = () => {
+    if (!currentState)
+        return null;
+    return {
+        mapJson: currentState.mapJson,
+        zoom: currentState.zoom,
+        pngPath: currentState.pngPath,
+        tilesets: currentState.tilesets,
+        visibleLayers: [...visibleLayers]
+    };
+};
 async function renderTiledMap(mapJson, pngPath, canvas) {
     const ctx = canvas.getContext('2d');
     const tileWidth = mapJson.tilewidth;
@@ -27,7 +39,7 @@ async function renderTiledMap(mapJson, pngPath, canvas) {
     // Initialize visible layers (all visible by default)
     visibleLayers = mapJson.layers.map((l) => l.type !== 'tilelayer' || l.visible !== false);
     // Store state for re-renders (default 300% zoom for Amiga 320×256 screens)
-    currentState = { mapJson, tilesheet, canvas, zoom: 3 };
+    currentState = { mapJson, tilesheet, canvas, zoom: 3, pngPath, tilesets: new Map() };
     // Render layer toggles
     updateLayerToggles(mapJson);
     // Render zoom
