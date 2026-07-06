@@ -1128,13 +1128,13 @@ body {
 #tiled-tilesheet-iff .iff-hover-popup {
   display: none;
   position: absolute;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: #0d1117;
+  background: transparent;
   border: 1px solid #0f3460;
-  border-radius: 6px;
-  padding: 8px;
+  border-radius: 4px;
+  padding: 0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   z-index: 100;
 }
