@@ -359,6 +359,7 @@ function initTiledViewerTab(): void {
   let currentMapIdx = -1;
   let pngPath = '';
   let tiledIffBitplanes = 4; // Default bitplanes for tilesheet IFF export
+  let tiledIffModalZoom = 100; // Default preview zoom in dialog
   let tiledIffLastResult: { palette: Uint8Array; indexMap: Uint8Array; iff: Uint8Array } | null = null;
   let tiledTilesheetImage: HTMLImageElement | null = null;
 
@@ -568,11 +569,24 @@ function initTiledViewerTab(): void {
     updateTiledIffModalPreview(img, tiledIffBitplanes);
   }
 
+  function applyTiledIffModalZoom(): void {
+    const zoom = tiledIffModalZoom / 100;
+    const origCanvas = document.getElementById('tiled-iff-modal-orig-canvas') as HTMLCanvasElement;
+    const previewCanvas = document.getElementById('tiled-iff-modal-preview-canvas') as HTMLCanvasElement;
+    const img = tiledTilesheetImage;
+    if (!img) return;
+    origCanvas.style.width = (img.width * zoom) + 'px';
+    origCanvas.style.height = (img.height * zoom) + 'px';
+    previewCanvas.style.width = (img.width * zoom) + 'px';
+    previewCanvas.style.height = (img.height * zoom) + 'px';
+    document.getElementById('tiled-iff-modal-zoom-label')!.textContent = Math.round(tiledIffModalZoom) + '%';
+  }
+
   function updateTiledIffModalPreview(img: HTMLImageElement, bp: number): void {
     const result = buildIffFromImage(img, bp);
     tiledIffLastResult = result;
 
-    // original canvas
+    // original canvas (native resolution)
     const origCanvas = document.getElementById('tiled-iff-modal-orig-canvas') as HTMLCanvasElement;
     origCanvas.width = img.width;
     origCanvas.height = img.height;
@@ -580,7 +594,7 @@ function initTiledViewerTab(): void {
     origCtx.imageSmoothingEnabled = false;
     origCtx.drawImage(img, 0, 0);
 
-    // preview canvas
+    // preview canvas (native resolution)
     const previewCanvas = document.getElementById('tiled-iff-modal-preview-canvas') as HTMLCanvasElement;
     previewCanvas.width = img.width;
     previewCanvas.height = img.height;
@@ -599,6 +613,9 @@ function initTiledViewerTab(): void {
       }
     }
     prevCtx.putImageData(imageData, 0, 0);
+
+    // Apply zoom to CSS dimensions
+    applyTiledIffModalZoom();
 
     // update labels
     const colors = 1 << bp;
@@ -624,8 +641,14 @@ function initTiledViewerTab(): void {
 
     const modal = document.getElementById('tiled-iff-modal')!;
     const bpSlider = document.getElementById('tiled-iff-modal-bitplanes') as HTMLInputElement;
+    const zoomSlider = document.getElementById('tiled-iff-modal-zoom') as HTMLInputElement;
     const cancelBtn = document.getElementById('tiled-iff-modal-cancel') as HTMLButtonElement;
     const saveBtn = document.getElementById('tiled-iff-modal-save') as HTMLButtonElement;
+
+    zoomSlider.addEventListener('input', () => {
+      tiledIffModalZoom = parseInt(zoomSlider.value);
+      applyTiledIffModalZoom();
+    });
 
     bpSlider.addEventListener('input', () => {
       const bp = parseInt(bpSlider.value);

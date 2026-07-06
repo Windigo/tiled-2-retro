@@ -26,7 +26,7 @@
 
   <!-- ===== TAB 1: TILED VIEWER ===== -->
   <div id="tab-content-tiled-viewer" class="tab-content active">
-    <div id="tiled-tab" style="display:flex;flex-direction:column;height:100%;background:#0d1117;">
+    <div id="tiled-tab" style="display:flex;flex-direction:column;flex:1;background:#0d1117;">
       <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#16213e;border-bottom:1px solid #0f3460;flex-shrink:0;">
         <button id="tiled-browse" style="background:#e94560;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;">Browse…</button>
         <span id="tiled-path" style="font-size:11px;color:#6a7a9a;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No folder selected</span>
@@ -41,19 +41,19 @@
         <span id="tiled-maps" style="display:flex;gap:4px;flex-wrap:wrap;"></span>
       </div>
       <div style="display:flex;flex:1;min-height:0;">
-        <!-- Canvas area -->
-        <div id="tiled-canvas-wrap" style="flex:1;overflow:auto;background:#000;margin:8px;border-radius:4px;">
+        <!-- Canvas area: takes half of available space -->
+        <div id="tiled-canvas-wrap" style="flex:1;overflow:auto;background:#000;margin:8px;border-radius:4px;display:flex;align-items:flex-start;justify-content:center;min-width:0;">
           <canvas id="tiled-canvas" style="display:block;image-rendering:pixelated;"></canvas>
         </div>
-        <!-- Layers panel (right side, vertical) -->
-        <div style="background:#16213e;min-width:180px;max-width:220px;padding:8px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;flex-shrink:0;margin:8px 8px 8px 0;border-radius:4px;border:1px solid #0f3460;">
+        <!-- Layers panel: takes the other half -->
+        <div style="flex:1;min-width:220px;padding:8px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;margin:8px 8px 8px 0;border-radius:4px;background:#16213e;border:1px solid #0f3460;">
           <span style="font-size:11px;color:#e94560;font-weight:600;margin-bottom:4px;">Layers</span>
           <span id="tiled-layers" style="display:flex;flex-direction:column;gap:2px;"></span>
           <!-- Tilesheet IFF link (below layers) -->
           <div id="tiled-tilesheet-iff" style="margin-top:8px;padding-top:8px;border-top:1px solid #0f3460;display:none;">
             <span class="iff-hover-trigger" id="tiled-tilesheet-iff-trigger">Tilesheet IFF</span>
             <div class="iff-hover-popup" id="tiled-tilesheet-iff-popup">
-              <canvas id="tiled-tilesheet-iff-preview" class="preview-thumb" style="width:128px;height:auto;"></canvas>
+              <canvas id="tiled-tilesheet-iff-preview" class="preview-thumb" style="width:512px;height:auto;"></canvas>
             </div>
           </div>
         </div>
@@ -67,7 +67,6 @@
     <div class="converter-panel">
       <h2 class="panel-title">PNG → IFF Converter</h2>
       <p class="hint">Convert a PNG tilesheet to Amiga IFF/ILBM format with configurable bitplanes and color quantization.</p>
-
       <div class="converter-form">
         <div class="form-group">
           <label>Source PNG</label>
@@ -76,14 +75,12 @@
             <span id="png-file-name-conv" class="file-name">no file selected</span>
           </div>
         </div>
-
         <div class="form-row">
           <div class="form-group">
             <label>Bitplanes: <strong id="conv-bp-label">4</strong> (<span id="conv-colors-label">16 colors</span>)</label>
             <input type="range" id="conv-bitplanes" min="1" max="8" value="4" step="1">
           </div>
         </div>
-
         <div class="converter-preview-row" id="conv-png-preview-row" style="display:none;">
           <div class="form-group">
             <label>PNG Preview</label>
@@ -94,18 +91,15 @@
             <canvas id="conv-iff-canvas" class="conv-preview-canvas"></canvas>
           </div>
         </div>
-
         <div id="conv-file-info" class="conv-file-info" style="display:none;">
           <span id="conv-png-dim"></span>
           <span id="conv-iff-size"></span>
           <span id="conv-iff-colors"></span>
         </div>
-
         <div id="conv-palette" class="conv-palette" style="display:none;">
           <label>Palette (CMAP)</label>
           <div id="conv-palette-swatches" class="conv-palette-swatches"></div>
         </div>
-
         <div class="modal-footer">
           <button id="btn-convert-iff" class="btn-primary" disabled>Convert & Save IFF</button>
         </div>
@@ -118,6 +112,10 @@
     <div class="modal">
       <h2>Tilesheet IFF Settings</h2>
       <div class="modal-body">
+        <div class="form-group" style="margin-bottom:4px;">
+          <label>Preview Zoom: <strong id="tiled-iff-modal-zoom-label">100%</strong></label>
+          <input type="range" id="tiled-iff-modal-zoom" min="25" max="400" value="100" step="25">
+        </div>
         <div class="converter-preview-row" id="tiled-iff-modal-preview-row">
           <div class="form-group">
             <label>Original</label>

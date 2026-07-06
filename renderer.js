@@ -329,6 +329,7 @@ function initTiledViewerTab() {
     let currentMapIdx = -1;
     let pngPath = '';
     let tiledIffBitplanes = 4; // Default bitplanes for tilesheet IFF export
+    let tiledIffModalZoom = 100; // Default preview zoom in dialog
     let tiledIffLastResult = null;
     let tiledTilesheetImage = null;
     async function doTiledExport() {
@@ -522,17 +523,30 @@ function initTiledViewerTab() {
         bpSlider.value = String(tiledIffBitplanes);
         updateTiledIffModalPreview(img, tiledIffBitplanes);
     }
+    function applyTiledIffModalZoom() {
+        const zoom = tiledIffModalZoom / 100;
+        const origCanvas = document.getElementById('tiled-iff-modal-orig-canvas');
+        const previewCanvas = document.getElementById('tiled-iff-modal-preview-canvas');
+        const img = tiledTilesheetImage;
+        if (!img)
+            return;
+        origCanvas.style.width = (img.width * zoom) + 'px';
+        origCanvas.style.height = (img.height * zoom) + 'px';
+        previewCanvas.style.width = (img.width * zoom) + 'px';
+        previewCanvas.style.height = (img.height * zoom) + 'px';
+        document.getElementById('tiled-iff-modal-zoom-label').textContent = Math.round(tiledIffModalZoom) + '%';
+    }
     function updateTiledIffModalPreview(img, bp) {
         const result = buildIffFromImage(img, bp);
         tiledIffLastResult = result;
-        // original canvas
+        // original canvas (native resolution)
         const origCanvas = document.getElementById('tiled-iff-modal-orig-canvas');
         origCanvas.width = img.width;
         origCanvas.height = img.height;
         const origCtx = origCanvas.getContext('2d');
         origCtx.imageSmoothingEnabled = false;
         origCtx.drawImage(img, 0, 0);
-        // preview canvas
+        // preview canvas (native resolution)
         const previewCanvas = document.getElementById('tiled-iff-modal-preview-canvas');
         previewCanvas.width = img.width;
         previewCanvas.height = img.height;
@@ -551,6 +565,8 @@ function initTiledViewerTab() {
             }
         }
         prevCtx.putImageData(imageData, 0, 0);
+        // Apply zoom to CSS dimensions
+        applyTiledIffModalZoom();
         // update labels
         const colors = 1 << bp;
         document.getElementById('tiled-iff-modal-bp-label').textContent = String(bp);
@@ -573,8 +589,13 @@ function initTiledViewerTab() {
         tiledIffModalSetupDone = true;
         const modal = document.getElementById('tiled-iff-modal');
         const bpSlider = document.getElementById('tiled-iff-modal-bitplanes');
+        const zoomSlider = document.getElementById('tiled-iff-modal-zoom');
         const cancelBtn = document.getElementById('tiled-iff-modal-cancel');
         const saveBtn = document.getElementById('tiled-iff-modal-save');
+        zoomSlider.addEventListener('input', () => {
+            tiledIffModalZoom = parseInt(zoomSlider.value);
+            applyTiledIffModalZoom();
+        });
         bpSlider.addEventListener('input', () => {
             const bp = parseInt(bpSlider.value);
             if (tiledTilesheetImage) {
