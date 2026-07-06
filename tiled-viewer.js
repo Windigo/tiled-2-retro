@@ -12,6 +12,7 @@ window.tiledGetExportData = () => {
         mapJson: currentState.mapJson,
         zoom: currentState.zoom,
         pngPath: currentState.pngPath,
+        tilesheet: currentState.tilesheet,
         tilesets: currentState.tilesets,
         visibleLayers: [...visibleLayers]
     };

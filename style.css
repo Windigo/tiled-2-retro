@@ -1081,7 +1081,8 @@ body {
 }
 
 /* Range slider (bitplanes) */
-#conv-bitplanes {
+#conv-bitplanes,
+#tiled-iff-modal-bitplanes {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -1092,7 +1093,8 @@ body {
   margin-top: 4px;
 }
 
-#conv-bitplanes::-webkit-slider-thumb {
+#conv-bitplanes::-webkit-slider-thumb,
+#tiled-iff-modal-bitplanes::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 18px;
@@ -1101,6 +1103,42 @@ body {
   background: #e94560;
   cursor: pointer;
   border: 2px solid #fff;
+}
+
+/* Tilesheet IFF link in layers panel */
+#tiled-tilesheet-iff {
+  position: relative;
+}
+
+#tiled-tilesheet-iff .iff-hover-trigger {
+  font-size: 11px;
+  color: #6a7a9a;
+  font-style: italic;
+  cursor: pointer;
+  border-bottom: 1px dotted #6a7a9a;
+}
+
+#tiled-tilesheet-iff .iff-hover-trigger:hover {
+  color: #e94560;
+  border-bottom-color: #e94560;
+}
+
+#tiled-tilesheet-iff .iff-hover-popup {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0d1117;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  z-index: 100;
+}
+
+#tiled-tilesheet-iff:hover .iff-hover-popup {
+  display: block;
 }
 
 /* ---- SCROLLBAR ---- */

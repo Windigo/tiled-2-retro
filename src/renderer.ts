@@ -358,6 +358,9 @@ function initTiledViewerTab(): void {
   let mapList: { name: string; jsonPath: string }[] = [];
   let currentMapIdx = -1;
   let pngPath = '';
+  let tiledIffBitplanes = 4; // Default bitplanes for tilesheet IFF export
+  let tiledIffLastResult: { palette: Uint8Array; indexMap: Uint8Array; iff: Uint8Array } | null = null;
+  let tiledTilesheetImage: HTMLImageElement | null = null;
 
   async function doTiledExport(): Promise<void> {
     const exportData = (window as any).tiledGetExportData?.();
@@ -381,7 +384,7 @@ function initTiledViewerTab(): void {
       }
     }
 
-    const bp = 4;
+    const bp = tiledIffBitplanes;
     let iffData: Uint8Array | null = null;
     if (image) {
       iffData = buildIffFromImage(image, bp).iff;
@@ -489,7 +492,166 @@ function initTiledViewerTab(): void {
     if ((window as any).renderTiledMap) {
       await (window as any).renderTiledMap(mapJson, pngPath, canvas);
       if (exportBtn) exportBtn.disabled = false;
+      // Setup tilesheet IFF link after render
+      setupTiledIffLink();
     }
+  }
+
+  // ─── Tilesheet IFF link ──────────────────────────────────────────────
+
+  function getTilesheetImage(): HTMLImageElement | null {
+    const exportData = (window as any).tiledGetExportData?.();
+    if (!exportData || !exportData.tilesheet) return null;
+    return exportData.tilesheet;
+  }
+
+  function updateTiledIffPreview(img: HTMLImageElement, bp: number): void {
+    const result = buildIffFromImage(img, bp);
+    tiledIffLastResult = result;
+
+    // Update hover popup preview
+    const popupCanvas = document.getElementById('tiled-tilesheet-iff-preview') as HTMLCanvasElement;
+    if (popupCanvas && result.palette && result.indexMap) {
+      const w = img.width, h = img.height;
+      popupCanvas.width = w;
+      popupCanvas.height = h;
+      const ctx = popupCanvas.getContext('2d')!;
+      ctx.imageSmoothingEnabled = false;
+      const imageData = ctx.createImageData(w, h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = result.indexMap[y * w + x];
+          const colOff = idx * 3;
+          const pxOff = (y * w + x) * 4;
+          imageData.data[pxOff] = result.palette[colOff];
+          imageData.data[pxOff + 1] = result.palette[colOff + 1];
+          imageData.data[pxOff + 2] = result.palette[colOff + 2];
+          imageData.data[pxOff + 3] = 255;
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+  }
+
+  function setupTiledIffLink(): void {
+    const img = getTilesheetImage();
+    if (!img) return;
+
+    tiledTilesheetImage = img;
+
+    // Show the tilesheet IFF section
+    const iffSection = document.getElementById('tiled-tilesheet-iff')!;
+    iffSection.style.display = 'block';
+
+    // Update hover preview
+    updateTiledIffPreview(img, tiledIffBitplanes);
+
+    // Click handler opens the modal
+    const trigger = document.getElementById('tiled-tilesheet-iff-trigger')!;
+    const newTrigger = trigger.cloneNode(true) as HTMLElement;
+    trigger.parentNode!.replaceChild(newTrigger, trigger);
+    newTrigger.addEventListener('click', () => openTiledIffModal());
+
+    // Setup modal if not done yet
+    setupTiledIffModal();
+  }
+
+  function openTiledIffModal(): void {
+    const modal = document.getElementById('tiled-iff-modal')!;
+    modal.classList.remove('hidden');
+
+    const img = tiledTilesheetImage;
+    if (!img) return;
+
+    const bpSlider = document.getElementById('tiled-iff-modal-bitplanes') as HTMLInputElement;
+    bpSlider.value = String(tiledIffBitplanes);
+    updateTiledIffModalPreview(img, tiledIffBitplanes);
+  }
+
+  function updateTiledIffModalPreview(img: HTMLImageElement, bp: number): void {
+    const result = buildIffFromImage(img, bp);
+    tiledIffLastResult = result;
+
+    // original canvas
+    const origCanvas = document.getElementById('tiled-iff-modal-orig-canvas') as HTMLCanvasElement;
+    origCanvas.width = img.width;
+    origCanvas.height = img.height;
+    const origCtx = origCanvas.getContext('2d')!;
+    origCtx.imageSmoothingEnabled = false;
+    origCtx.drawImage(img, 0, 0);
+
+    // preview canvas
+    const previewCanvas = document.getElementById('tiled-iff-modal-preview-canvas') as HTMLCanvasElement;
+    previewCanvas.width = img.width;
+    previewCanvas.height = img.height;
+    const prevCtx = previewCanvas.getContext('2d')!;
+    prevCtx.imageSmoothingEnabled = false;
+    const imageData = prevCtx.createImageData(img.width, img.height);
+    for (let y = 0; y < img.height; y++) {
+      for (let x = 0; x < img.width; x++) {
+        const idx = result.indexMap[y * img.width + x];
+        const colOff = idx * 3;
+        const pxOff = (y * img.width + x) * 4;
+        imageData.data[pxOff] = result.palette[colOff];
+        imageData.data[pxOff + 1] = result.palette[colOff + 1];
+        imageData.data[pxOff + 2] = result.palette[colOff + 2];
+        imageData.data[pxOff + 3] = 255;
+      }
+    }
+    prevCtx.putImageData(imageData, 0, 0);
+
+    // update labels
+    const colors = 1 << bp;
+    document.getElementById('tiled-iff-modal-bp-label')!.textContent = String(bp);
+    document.getElementById('tiled-iff-modal-colors-label')!.textContent = `${colors} color${bp !== 1 ? 's' : ''}`;
+    document.getElementById('tiled-iff-modal-cmap-info')!.textContent = `${colors} color${bp !== 1 ? 's' : ''}`;
+
+    // update palette swatches
+    const swatchesEl = document.getElementById('tiled-iff-modal-palette-swatches')!;
+    let html = '';
+    for (let i = 0; i < colors; i++) {
+      const off = i * 3;
+      const r = result.palette[off], g = result.palette[off + 1], b = result.palette[off + 2];
+      html += `<span class="conv-swatch" style="background:rgb(${r},${g},${b})" title="#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}"></span>`;
+    }
+    swatchesEl.innerHTML = html;
+  }
+
+  let tiledIffModalSetupDone = false;
+  function setupTiledIffModal(): void {
+    if (tiledIffModalSetupDone) return;
+    tiledIffModalSetupDone = true;
+
+    const modal = document.getElementById('tiled-iff-modal')!;
+    const bpSlider = document.getElementById('tiled-iff-modal-bitplanes') as HTMLInputElement;
+    const cancelBtn = document.getElementById('tiled-iff-modal-cancel') as HTMLButtonElement;
+    const saveBtn = document.getElementById('tiled-iff-modal-save') as HTMLButtonElement;
+
+    bpSlider.addEventListener('input', () => {
+      const bp = parseInt(bpSlider.value);
+      if (tiledTilesheetImage) {
+        updateTiledIffModalPreview(tiledTilesheetImage, bp);
+      }
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+
+    saveBtn.addEventListener('click', () => {
+      tiledIffBitplanes = parseInt(bpSlider.value);
+      // Also update the hover popup
+      if (tiledTilesheetImage) {
+        updateTiledIffPreview(tiledTilesheetImage, tiledIffBitplanes);
+      }
+      modal.classList.add('hidden');
+      showToast(`IFF bitplanes set to ${tiledIffBitplanes} (${1 << tiledIffBitplanes} colors)`, 'success');
+    });
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
   }
 }
 

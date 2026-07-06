@@ -18,14 +18,16 @@ let visibleLayers: boolean[] = [];
   mapJson: any;
   zoom: number;
   pngPath: string;
+  tilesheet: HTMLImageElement | null;
   tilesets: Map<number, { image: HTMLImageElement; path: string }>;
   visibleLayers: boolean[];
 } | null => {
   if (!currentState) return null;
-  return {
+    return {
     mapJson: currentState.mapJson,
     zoom: currentState.zoom,
     pngPath: currentState.pngPath,
+    tilesheet: currentState.tilesheet,
     tilesets: currentState.tilesets,
     visibleLayers: [...visibleLayers]
   };

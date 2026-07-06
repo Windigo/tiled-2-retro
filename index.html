@@ -49,6 +49,13 @@
         <div style="background:#16213e;min-width:180px;max-width:220px;padding:8px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;flex-shrink:0;margin:8px 8px 8px 0;border-radius:4px;border:1px solid #0f3460;">
           <span style="font-size:11px;color:#e94560;font-weight:600;margin-bottom:4px;">Layers</span>
           <span id="tiled-layers" style="display:flex;flex-direction:column;gap:2px;"></span>
+          <!-- Tilesheet IFF link (below layers) -->
+          <div id="tiled-tilesheet-iff" style="margin-top:8px;padding-top:8px;border-top:1px solid #0f3460;display:none;">
+            <span class="iff-hover-trigger" id="tiled-tilesheet-iff-trigger">Tilesheet IFF</span>
+            <div class="iff-hover-popup" id="tiled-tilesheet-iff-popup">
+              <canvas id="tiled-tilesheet-iff-preview" class="preview-thumb" style="width:128px;height:auto;"></canvas>
+            </div>
+          </div>
         </div>
       </div>
       <div id="tiled-status" style="font-size:11px;color:#0f0;padding:4px 12px;background:#0d1117;border-top:1px solid #0f3460;flex-shrink:0;min-height:22px;font-family:monospace;"></div>
@@ -102,6 +109,37 @@
         <div class="modal-footer">
           <button id="btn-convert-iff" class="btn-primary" disabled>Convert & Save IFF</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IFF Bitplanes Settings Modal -->
+  <div class="modal-overlay hidden" id="tiled-iff-modal">
+    <div class="modal">
+      <h2>Tilesheet IFF Settings</h2>
+      <div class="modal-body">
+        <div class="converter-preview-row" id="tiled-iff-modal-preview-row">
+          <div class="form-group">
+            <label>Original</label>
+            <canvas id="tiled-iff-modal-orig-canvas" class="conv-preview-canvas"></canvas>
+          </div>
+          <div class="form-group">
+            <label>IFF Preview (<span id="tiled-iff-modal-colors-label">16 colors</span>)</label>
+            <canvas id="tiled-iff-modal-preview-canvas" class="conv-preview-canvas"></canvas>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Bitplanes: <strong id="tiled-iff-modal-bp-label">4</strong> (<span id="tiled-iff-modal-cmap-info">16 colors</span>)</label>
+          <input type="range" id="tiled-iff-modal-bitplanes" min="1" max="8" value="4" step="1">
+        </div>
+        <div id="tiled-iff-modal-palette" class="conv-palette" style="display:block;">
+          <label>Palette (CMAP)</label>
+          <div id="tiled-iff-modal-palette-swatches" class="conv-palette-swatches"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="tiled-iff-modal-cancel" class="btn-secondary">Cancel</button>
+        <button id="tiled-iff-modal-save" class="btn-primary">Save</button>
       </div>
     </div>
   </div>
