@@ -30,10 +30,6 @@
       <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#16213e;border-bottom:1px solid #0f3460;flex-shrink:0;">
         <button id="tiled-browse" style="background:#e94560;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;">Browse…</button>
         <span id="tiled-path" style="font-size:11px;color:#6a7a9a;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No folder selected</span>
-        <button id="tiled-zoom-out" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a508b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;" title="Zoom out">−</button>
-        <span id="tiled-zoom-label" style="font-size:11px;color:#6a7a9a;min-width:50px;text-align:center;">300%</span>
-        <button id="tiled-zoom-in" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a508b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;" title="Zoom in">+</button>
-        <span style="border-left:1px solid #1a508b;margin:0 8px;height:24px;"></span>
         <button id="tiled-export-amiga" style="background:#1a508b;color:#e0e0e0;border:1px solid #0f3460;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;" title="Export to Amiga .ab3" disabled>Export Amiga</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#16213e;border-bottom:1px solid #0f3460;flex-shrink:0;flex-wrap:wrap;">
@@ -109,26 +105,22 @@
 
   <!-- IFF Bitplanes Settings Modal -->
   <div class="modal-overlay hidden" id="tiled-iff-modal">
-    <div class="modal">
+    <div class="modal" style="max-width:95vw;width:95vw;min-width:auto;">
       <h2>Tilesheet IFF Settings</h2>
       <div class="modal-body">
-        <div class="form-group" style="margin-bottom:4px;">
-          <label>Preview Zoom: <strong id="tiled-iff-modal-zoom-label">100%</strong></label>
-          <input type="range" id="tiled-iff-modal-zoom" min="25" max="400" value="100" step="25">
-        </div>
-        <div class="converter-preview-row" id="tiled-iff-modal-preview-row">
-          <div class="form-group">
+        <div style="display:flex;gap:16px;" id="tiled-iff-modal-preview-row">
+          <div class="form-group" style="flex:1;min-width:0;">
             <label>Original</label>
-            <canvas id="tiled-iff-modal-orig-canvas" class="conv-preview-canvas"></canvas>
+            <canvas id="tiled-iff-modal-orig-canvas" style="width:100%;height:auto;image-rendering:pixelated;border:1px solid #0f3460;border-radius:4px;background:#000;"></canvas>
           </div>
-          <div class="form-group">
-            <label>IFF Preview (<span id="tiled-iff-modal-colors-label">16 colors</span>)</label>
-            <canvas id="tiled-iff-modal-preview-canvas" class="conv-preview-canvas"></canvas>
+          <div class="form-group" style="flex:1;min-width:0;">
+            <label>IFF Preview (<span id="tiled-iff-modal-colors-label">8 colors</span>)</label>
+            <canvas id="tiled-iff-modal-preview-canvas" style="width:100%;height:auto;image-rendering:pixelated;border:1px solid #0f3460;border-radius:4px;background:#000;"></canvas>
           </div>
         </div>
         <div class="form-group">
-          <label>Bitplanes: <strong id="tiled-iff-modal-bp-label">4</strong> (<span id="tiled-iff-modal-cmap-info">16 colors</span>)</label>
-          <input type="range" id="tiled-iff-modal-bitplanes" min="1" max="8" value="4" step="1">
+          <label>Bitplanes: <strong id="tiled-iff-modal-bp-label">3</strong> (<span id="tiled-iff-modal-cmap-info">8 colors</span>)</label>
+          <input type="range" id="tiled-iff-modal-bitplanes" min="1" max="8" value="3" step="1">
         </div>
         <div id="tiled-iff-modal-palette" class="conv-palette" style="display:block;">
           <label>Palette (CMAP)</label>

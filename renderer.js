@@ -159,7 +159,7 @@ function stringToAmigaBytes(str) {
     return buf;
 }
 function gidToTile(gid) { return gid > 0 ? gid - 1 : 0; }
-function buildTiledMapAb3(mapJson, imageWidth, imageHeight) {
+function buildTiledMapAb3(mapJson, bitplanes, imageWidth, imageHeight) {
     const tileSize = mapJson.tilewidth;
     const mapCols = mapJson.width;
     const mapRows = mapJson.height;
@@ -193,10 +193,11 @@ function buildTiledMapAb3(mapJson, imageWidth, imageHeight) {
     const sheetW = imageWidth ?? ts0?.imagewidth ?? 320;
     const sheetH = imageHeight ?? ts0?.imageheight ?? 256;
     const sheetCols = Math.max(1, Math.floor(sheetW / tileSize));
-    const bp = 4;
+    const bp = bitplanes;
+    const iffFilename = `tiles_${bp}bp.iff`;
     return `; ---------------------------------------------------------------
 ; map.ab3 -- Tiled map export via RetroMapEditor
-; Draw-only: laadt tiles.iff en tekent de map
+; Draw-only: laadt ${iffFilename} en tekent de map
 ; ---------------------------------------------------------------
 
 #MAP_COLS   = ${mapCols}
@@ -220,7 +221,7 @@ Next i
 BitMap 0, ${sheetW}, ${sheetH}, #BITPLANES
 BitMap 1, ${mapCols * tileSize}, ${mapRows * tileSize}, #BITPLANES
 
-LoadBitMap 0, "tiles.iff", 0
+LoadBitMap 0, "${iffFilename}", 0
 VWait 100
 
 BLITZ
@@ -303,21 +304,9 @@ function initTiledViewerTab() {
     const fileEl = document.getElementById('tiled-filename');
     const mapsEl = document.getElementById('tiled-maps');
     const canvas = document.getElementById('tiled-canvas');
-    const zoomInBtn = document.getElementById('tiled-zoom-in');
-    const zoomOutBtn = document.getElementById('tiled-zoom-out');
     const canvasWrap = document.getElementById('tiled-canvas-wrap');
     const exportBtn = document.getElementById('tiled-export-amiga');
     let currentZoom = 3;
-    if (zoomInBtn)
-        zoomInBtn.addEventListener('click', () => {
-            currentZoom = Math.min(4, currentZoom + 0.25);
-            window.tiledSetZoom?.(currentZoom);
-        });
-    if (zoomOutBtn)
-        zoomOutBtn.addEventListener('click', () => {
-            currentZoom = Math.max(0.1, currentZoom - 0.25);
-            window.tiledSetZoom?.(currentZoom);
-        });
     if (canvasWrap)
         canvasWrap.addEventListener('wheel', (e) => {
             e.preventDefault();
@@ -328,8 +317,7 @@ function initTiledViewerTab() {
     let mapList = [];
     let currentMapIdx = -1;
     let pngPath = '';
-    let tiledIffBitplanes = 4; // Default bitplanes for tilesheet IFF export
-    let tiledIffModalZoom = 100; // Default preview zoom in dialog
+    let tiledIffBitplanes = 3; // Default bitplanes for tilesheet IFF export (8 colors)
     let tiledIffLastResult = null;
     let tiledTilesheetImage = null;
     async function doTiledExport() {
@@ -363,9 +351,9 @@ function initTiledViewerTab() {
         if (image) {
             iffData = buildIffFromImage(image, bp).iff;
         }
-        const mapsAb3raw = buildTiledMapAb3(mapJson, imgW, imgH);
+        const mapsAb3raw = buildTiledMapAb3(mapJson, bp, imgW, imgH);
         const mapsAb3Bytes = stringToAmigaBytes(mapsAb3raw);
-        const gameAb3Bytes = stringToAmigaBytes(buildTiledMapAb3(mapJson, imgW, imgH));
+        const gameAb3Bytes = stringToAmigaBytes(buildTiledMapAb3(mapJson, bp, imgW, imgH));
         const playerAb3Bytes = stringToAmigaBytes(`; player.ab3 (Tiled export) - not used, everything is in map.ab3\n`);
         if (!currentFolder) {
             showToast('No folder selected', 'error');
@@ -374,6 +362,7 @@ function initTiledViewerTab() {
         const success = await editorApi.exportAmiga({
             projectFolder: currentFolder,
             iffData: iffData ? Array.from(iffData) : [],
+            iffBitplanes: bp,
             mapsAb3Data: Array.from(mapsAb3Bytes),
             gameAb3Data: Array.from(gameAb3Bytes),
             playerAb3Data: Array.from(playerAb3Bytes)
@@ -505,8 +494,9 @@ function initTiledViewerTab() {
         iffSection.style.display = 'block';
         // Update hover preview
         updateTiledIffPreview(img, tiledIffBitplanes);
-        // Click handler opens the modal
+        // Update link text to show current setting, then wire click handler
         const trigger = document.getElementById('tiled-tilesheet-iff-trigger');
+        trigger.textContent = `Tilesheet IFF (${tiledIffBitplanes}bp / ${1 << tiledIffBitplanes} colors)`;
         const newTrigger = trigger.cloneNode(true);
         trigger.parentNode.replaceChild(newTrigger, trigger);
         newTrigger.addEventListener('click', () => openTiledIffModal());
@@ -522,19 +512,6 @@ function initTiledViewerTab() {
         const bpSlider = document.getElementById('tiled-iff-modal-bitplanes');
         bpSlider.value = String(tiledIffBitplanes);
         updateTiledIffModalPreview(img, tiledIffBitplanes);
-    }
-    function applyTiledIffModalZoom() {
-        const zoom = tiledIffModalZoom / 100;
-        const origCanvas = document.getElementById('tiled-iff-modal-orig-canvas');
-        const previewCanvas = document.getElementById('tiled-iff-modal-preview-canvas');
-        const img = tiledTilesheetImage;
-        if (!img)
-            return;
-        origCanvas.style.width = (img.width * zoom) + 'px';
-        origCanvas.style.height = (img.height * zoom) + 'px';
-        previewCanvas.style.width = (img.width * zoom) + 'px';
-        previewCanvas.style.height = (img.height * zoom) + 'px';
-        document.getElementById('tiled-iff-modal-zoom-label').textContent = Math.round(tiledIffModalZoom) + '%';
     }
     function updateTiledIffModalPreview(img, bp) {
         const result = buildIffFromImage(img, bp);
@@ -565,8 +542,6 @@ function initTiledViewerTab() {
             }
         }
         prevCtx.putImageData(imageData, 0, 0);
-        // Apply zoom to CSS dimensions
-        applyTiledIffModalZoom();
         // update labels
         const colors = 1 << bp;
         document.getElementById('tiled-iff-modal-bp-label').textContent = String(bp);
@@ -589,13 +564,8 @@ function initTiledViewerTab() {
         tiledIffModalSetupDone = true;
         const modal = document.getElementById('tiled-iff-modal');
         const bpSlider = document.getElementById('tiled-iff-modal-bitplanes');
-        const zoomSlider = document.getElementById('tiled-iff-modal-zoom');
         const cancelBtn = document.getElementById('tiled-iff-modal-cancel');
         const saveBtn = document.getElementById('tiled-iff-modal-save');
-        zoomSlider.addEventListener('input', () => {
-            tiledIffModalZoom = parseInt(zoomSlider.value);
-            applyTiledIffModalZoom();
-        });
         bpSlider.addEventListener('input', () => {
             const bp = parseInt(bpSlider.value);
             if (tiledTilesheetImage) {
@@ -607,10 +577,13 @@ function initTiledViewerTab() {
         });
         saveBtn.addEventListener('click', () => {
             tiledIffBitplanes = parseInt(bpSlider.value);
-            // Also update the hover popup
+            // Update the hover popup and link text
             if (tiledTilesheetImage) {
                 updateTiledIffPreview(tiledTilesheetImage, tiledIffBitplanes);
             }
+            const trigger = document.getElementById('tiled-tilesheet-iff-trigger');
+            if (trigger)
+                trigger.textContent = `Tilesheet IFF (${tiledIffBitplanes}bp / ${1 << tiledIffBitplanes} colors)`;
             modal.classList.add('hidden');
             showToast(`IFF bitplanes set to ${tiledIffBitplanes} (${1 << tiledIffBitplanes} colors)`, 'success');
         });

@@ -1082,8 +1082,7 @@ body {
 
 /* Range slider (bitplanes) */
 #conv-bitplanes,
-#tiled-iff-modal-bitplanes,
-#tiled-iff-modal-zoom {
+#tiled-iff-modal-bitplanes {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -1095,8 +1094,7 @@ body {
 }
 
 #conv-bitplanes::-webkit-slider-thumb,
-#tiled-iff-modal-bitplanes::-webkit-slider-thumb,
-#tiled-iff-modal-zoom::-webkit-slider-thumb {
+#tiled-iff-modal-bitplanes::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 18px;
