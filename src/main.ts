@@ -27,7 +27,7 @@ function createWindow(): void {
   win.loadFile('index.html');
   win.setMenuBarVisibility(false);
   win.setMenu(null); // Remove default Electron menu entirely
-  // win.webContents.openDevTools();
+  win.webContents.openDevTools();
 }
 
 // ─── IPC: File dialogs for project workflow ──────────────────────────────────
@@ -206,6 +206,17 @@ ipcMain.handle('check-amiga-export', async (_event: unknown, projectFolder: stri
     return files.every(f => fs.existsSync(path.join(amigaDir, f)));
   } catch {
     return false;
+  }
+});
+
+/** Read a text file from disk. */
+ipcMain.handle('read-text-file', async (_event: unknown, filePath: string): Promise<string | null> => {
+  if (!isSafePath(filePath)) return null;
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    console.error('Failed to read text file:', err);
+    return null;
   }
 });
 

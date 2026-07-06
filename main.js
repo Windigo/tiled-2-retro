@@ -59,7 +59,7 @@ function createWindow() {
     win.loadFile('index.html');
     win.setMenuBarVisibility(false);
     win.setMenu(null); // Remove default Electron menu entirely
-    // win.webContents.openDevTools();
+    win.webContents.openDevTools();
 }
 // ─── IPC: File dialogs for project workflow ──────────────────────────────────
 /** Pick a PNG tilesheet file; returns { dataUrl, fileName } or null. */
@@ -197,6 +197,18 @@ electron_1.ipcMain.handle('check-amiga-export', async (_event, projectFolder) =>
     }
     catch {
         return false;
+    }
+});
+/** Read a text file from disk. */
+electron_1.ipcMain.handle('read-text-file', async (_event, filePath) => {
+    if (!isSafePath(filePath))
+        return null;
+    try {
+        return fs.readFileSync(filePath, 'utf-8');
+    }
+    catch (err) {
+        console.error('Failed to read text file:', err);
+        return null;
     }
 });
 /** Read a PNG file from disk and return it as a data URL. */

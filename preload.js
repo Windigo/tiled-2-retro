@@ -26,6 +26,8 @@ const api = {
     loadPngFile: (filePath) => electron_1.ipcRenderer.invoke('load-png-file', filePath),
     /** Export Amiga files (tiles.iff, maps.ab3, game.ab3, player.ab3) to the amiga/ subfolder. */
     exportAmiga: (data) => electron_1.ipcRenderer.invoke('export-amiga', data),
+    /** Read a text file from disk (for TMX/TSX files). */
+    readTextFile: (filePath) => electron_1.ipcRenderer.invoke('read-text-file', filePath),
     /** List a directory for the custom file browser. */
     listDirectory: (dirPath) => electron_1.ipcRenderer.invoke('list-directory', dirPath),
     /** Load a project file at a specific path (for custom file browser). */

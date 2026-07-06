@@ -110,6 +110,10 @@ const api = {
   exportAmiga: (data: { projectFolder: string; iffData: number[]; mapsAb3Data: number[]; gameAb3Data: number[]; playerAb3Data: number[] }): Promise<boolean> =>
     ipcRenderer.invoke('export-amiga', data),
 
+  /** Read a text file from disk (for TMX/TSX files). */
+  readTextFile: (filePath: string): Promise<string | null> =>
+    ipcRenderer.invoke('read-text-file', filePath),
+
   /** List a directory for the custom file browser. */
   listDirectory: (dirPath: string): Promise<{ path: string; folders: string[]; files: string[] } | null> =>
     ipcRenderer.invoke('list-directory', dirPath),

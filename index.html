@@ -26,6 +26,7 @@
       <div class="menu-dropdown-content">
         <button class="menu-item" data-action="tab-level-editor">Level Editor</button>
         <button class="menu-item" data-action="tab-png-iff">PNG → IFF Converter</button>
+        <button class="menu-item" data-action="tab-tiled-viewer">Tiled Viewer</button>
       </div>
     </div>
   </div>
@@ -34,6 +35,7 @@
   <div id="top-bar">
     <button id="tab-level-editor" class="tab-btn active">Level Editor</button>
     <button id="tab-png-iff" class="tab-btn">PNG → IFF Converter</button>
+    <button id="tab-tiled-viewer" class="tab-btn">Tiled Viewer</button>
     <span id="project-name" class="project-name clickable" title="Click to rename project">— no project —</span>
     <input id="project-name-input" class="project-name-input hidden" type="text">
   </div>
@@ -216,6 +218,31 @@
     </div>
   </div>
 
+  <!-- ===== TAB 3: TILED VIEWER ===== -->
+  <div id="tab-content-tiled-viewer" class="tab-content">
+    <div id="tiled-tab" style="display:flex;flex-direction:column;height:100%;background:#0d1117;">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#16213e;border-bottom:1px solid #0f3460;flex-shrink:0;">
+        <button id="tiled-browse" style="background:#e94560;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;">Browse…</button>
+        <span id="tiled-path" style="font-size:11px;color:#6a7a9a;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No folder selected</span>
+        <button id="tiled-zoom-out" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a508b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;" title="Zoom out">−</button>
+        <span id="tiled-zoom-label" style="font-size:11px;color:#6a7a9a;min-width:50px;text-align:center;">100%</span>
+        <button id="tiled-zoom-in" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a508b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;" title="Zoom in">+</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#16213e;border-bottom:1px solid #0f3460;flex-shrink:0;flex-wrap:wrap;">
+        <span id="tiled-filename" style="font-size:11px;color:#e0e0e0;font-weight:600;margin-right:8px;">—</span>
+        <span id="tiled-maps" style="display:flex;gap:4px;flex-wrap:wrap;"></span>
+      </div>
+      <div id="tiled-canvas-wrap" style="flex:1;overflow:auto;background:#000;border:1px solid #0f3460;margin:8px;border-radius:4px;">
+        <canvas id="tiled-canvas" style="display:block;image-rendering:pixelated;"></canvas>
+      </div>
+      <div style="background:#16213e;border-top:1px solid #0f3460;padding:4px 8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex-shrink:0;">
+        <span style="font-size:11px;color:#6a7a9a;margin-right:4px;">Layers:</span>
+        <span id="tiled-layers" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;"></span>
+      </div>
+      <div id="tiled-status" style="font-size:11px;color:#0f0;padding:4px 12px;background:#0d1117;border-top:1px solid #0f3460;flex-shrink:0;min-height:22px;font-family:monospace;"></div>
+    </div>
+  </div>
+
   <!-- ===== TAB 2: PNG → IFF CONVERTER ===== -->
   <div id="tab-content-png-iff" class="tab-content">
     <div class="converter-panel">
@@ -272,5 +299,18 @@
 
   <script src="assets/jszip.min.js"></script>
   <script src="renderer.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "lit": "./node_modules/lit/index.js",
+        "lit/": "./node_modules/lit/",
+        "@lit/reactive-element": "./node_modules/@lit/reactive-element/reactive-element.js",
+        "lit-element/lit-element.js": "./node_modules/lit-element/lit-element.js",
+        "lit-html": "./node_modules/lit-html/lit-html.js",
+        "lit-html/": "./node_modules/lit-html/"
+      }
+    }
+  </script>
+  <script type="module" src="tiled-viewer.js"></script>
 </body>
 </html>

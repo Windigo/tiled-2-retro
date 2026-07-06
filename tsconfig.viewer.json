@@ -1,18 +1,20 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020", "DOM"],
+    "module": "ES2020",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "strict": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
     "outDir": ".",
     "rootDir": "src",
     "sourceMap": true,
     "declaration": false
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "src/tiled-viewer.ts"]
+  "include": ["src/tiled-viewer.ts"],
+  "exclude": ["node_modules"]
 }

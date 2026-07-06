@@ -1680,24 +1680,38 @@ document.querySelectorAll('.preview-tab-btn').forEach(btn => {
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────
 const tabLevelEditor = document.getElementById('tab-level-editor');
 const tabPngIff = document.getElementById('tab-png-iff');
+const tabTiledViewer = document.getElementById('tab-tiled-viewer');
 const contentLevelEditor = document.getElementById('tab-content-level-editor');
 const contentPngIff = document.getElementById('tab-content-png-iff');
+const contentTiledViewer = document.getElementById('tab-content-tiled-viewer');
+function deactivateAllTabs() {
+    tabLevelEditor.classList.remove('active');
+    tabPngIff.classList.remove('active');
+    if (tabTiledViewer)
+        tabTiledViewer.classList.remove('active');
+    contentLevelEditor.classList.remove('active');
+    contentPngIff.classList.remove('active');
+    contentTiledViewer.classList.remove('active');
+}
 function switchTab(tabName) {
+    deactivateAllTabs();
     if (tabName === 'png-iff') {
-        tabLevelEditor.classList.remove('active');
         tabPngIff.classList.add('active');
-        contentLevelEditor.classList.remove('active');
         contentPngIff.classList.add('active');
+    }
+    else if (tabName === 'tiled-viewer') {
+        tabTiledViewer.classList.add('active');
+        contentTiledViewer.classList.add('active');
+        initTiledViewerTab();
     }
     else {
         tabLevelEditor.classList.add('active');
-        tabPngIff.classList.remove('active');
         contentLevelEditor.classList.add('active');
-        contentPngIff.classList.remove('active');
     }
 }
 tabLevelEditor.addEventListener('click', () => switchTab('level-editor'));
 tabPngIff.addEventListener('click', () => switchTab('png-iff'));
+tabTiledViewer.addEventListener('click', () => switchTab('tiled-viewer'));
 // ─── CUSTOM MENU BAR (HTML dropdowns inside the window) ───────────────────
 document.querySelectorAll('#menu-bar .menu-item').forEach(el => {
     el.addEventListener('click', () => {
@@ -1759,6 +1773,9 @@ function handleMenuAction(action) {
             break;
         case 'tab-png-iff':
             switchTab('png-iff');
+            break;
+        case 'tab-tiled-viewer':
+            switchTab('tiled-viewer');
             break;
     }
 }
@@ -2048,6 +2065,157 @@ btnConvertIff.addEventListener('click', async () => {
     else
         showToast('Failed to save IFF', 'error');
 });
+// ─── TILED VIEWER TAB (Google's suggested approach) ───────────────────────
+let tiledViewerInitialized = false;
+async function initTiledViewerTab() {
+    if (tiledViewerInitialized)
+        return;
+    tiledViewerInitialized = true;
+    const browseBtn = document.getElementById('tiled-browse');
+    const pathEl = document.getElementById('tiled-path');
+    const fileEl = document.getElementById('tiled-filename');
+    const mapsEl = document.getElementById('tiled-maps');
+    const canvas = document.getElementById('tiled-canvas');
+    const zoomInBtn = document.getElementById('tiled-zoom-in');
+    const zoomOutBtn = document.getElementById('tiled-zoom-out');
+    const canvasWrap = document.getElementById('tiled-canvas-wrap');
+    let currentZoom = 1;
+    // Zoom buttons
+    if (zoomInBtn)
+        zoomInBtn.addEventListener('click', () => {
+            currentZoom = Math.min(4, currentZoom + 0.25);
+            window.tiledSetZoom?.(currentZoom);
+        });
+    if (zoomOutBtn)
+        zoomOutBtn.addEventListener('click', () => {
+            currentZoom = Math.max(0.1, currentZoom - 0.25);
+            window.tiledSetZoom?.(currentZoom);
+        });
+    // Mouse wheel zoom
+    if (canvasWrap)
+        canvasWrap.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            currentZoom = Math.max(0.1, Math.min(4, currentZoom + (e.deltaY > 0 ? -0.1 : 0.1)));
+            window.tiledSetZoom?.(currentZoom);
+        });
+    if (!browseBtn || !canvas)
+        return;
+    let currentFolder = '';
+    let mapList = [];
+    let currentMapIdx = -1;
+    let pngPath = '';
+    browseBtn.addEventListener('click', async () => {
+        const folder = await editorApi.pickFolder();
+        if (!folder)
+            return;
+        currentFolder = folder;
+        pathEl.textContent = folder;
+        const list = await editorApi.listDirectory(folder);
+        if (!list)
+            return;
+        const jsonFiles = list.files.filter((f) => f.toLowerCase().endsWith('.json'));
+        const pngFiles = list.files.filter((f) => f.toLowerCase().endsWith('.png'));
+        if (jsonFiles.length === 0) {
+            pathEl.textContent = folder + ' (no .json files found)';
+            return;
+        }
+        mapList = jsonFiles.map((f) => ({
+            name: f,
+            jsonPath: folder + '/' + f,
+        }));
+        // Find PNG: prefer one matching JSON name, else any PNG, else empty
+        pngPath = pngFiles.find((p) => jsonFiles.some((j) => p.replace(/\.png$/i, '') === j.replace(/\.json$/i, ''))) || pngFiles[0] || '';
+        if (pngPath)
+            pngPath = folder + '/' + pngPath;
+        // Render map buttons
+        mapsEl.innerHTML = mapList.map((m, i) => `<button class="tiled-map-btn" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a508b;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;" data-idx="${i}">${m.name}</button>`).join('');
+        mapsEl.querySelectorAll('.tiled-map-btn').forEach(btn => {
+            btn.addEventListener('click', () => loadMap(parseInt(btn.dataset.idx)));
+        });
+        // Load first map
+        if (mapList.length)
+            await loadMap(0);
+    });
+    async function loadMap(idx) {
+        if (idx < 0 || idx >= mapList.length)
+            return;
+        currentMapIdx = idx;
+        fileEl.textContent = mapList[idx].name;
+        // Highlight active button
+        mapsEl.querySelectorAll('.tiled-map-btn').forEach((b, i) => {
+            b.style.background = i === idx ? '#e94560' : '#0f3460';
+            b.style.color = i === idx ? '#fff' : '#e0e0e0';
+        });
+        // Load and parse JSON
+        const metaRaw = await editorApi.readTextFile(mapList[idx].jsonPath);
+        if (!metaRaw) {
+            document.getElementById('tiled-status').textContent = 'ERROR: Cannot read JSON';
+            return;
+        }
+        const mapJson = JSON.parse(metaRaw);
+        if (!pngPath) {
+            const ts = mapJson.tilesets?.[0];
+            if (ts?.image) {
+                // Direct image reference in JSON
+                pngPath = currentFolder + '/' + ts.image;
+            }
+            else if (ts?.source) {
+                // External TSX reference — read it to find the image path
+                try {
+                    const tsxRaw = await editorApi.readTextFile(currentFolder + '/' + ts.source);
+                    if (tsxRaw) {
+                        const m = tsxRaw.match(/<image\s+source="([^"]+)"/);
+                        if (m) {
+                            // TSX image path is relative to the TSX file's folder
+                            const tsxFolder = (currentFolder + '/' + ts.source).replace(/\/[^/]+$/, '');
+                            pngPath = tsxFolder + '/' + m[1];
+                        }
+                    }
+                }
+                catch { }
+            }
+            if (!pngPath) {
+                // Last resort: try to resolve relative paths (.. segments)
+                const cleanPath = (s) => {
+                    const segs = (currentFolder + '/' + s).split('/').filter(Boolean);
+                    const out = [];
+                    for (const seg of segs) {
+                        if (seg === '.')
+                            continue;
+                        if (seg === '..') {
+                            out.pop();
+                            continue;
+                        }
+                        out.push(seg);
+                    }
+                    return '/' + out.join('/');
+                };
+                if (ts?.image)
+                    pngPath = cleanPath(ts.image);
+                else if (ts?.source) {
+                    try {
+                        const tsxRaw = await editorApi.readTextFile(cleanPath(ts.source));
+                        if (tsxRaw) {
+                            const m = tsxRaw.match(/<image\s+source="([^"]+)"/);
+                            if (m) {
+                                pngPath = cleanPath(ts.source.replace(/\/[^/]+$/, '') + '/' + m[1]);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            if (!pngPath) {
+                document.getElementById('tiled-status').textContent = 'ERROR: No PNG tilesheet found';
+                return;
+            }
+        }
+        // Call renderTiledMap from tiled-viewer.js
+        if (window.renderTiledMap) {
+            await window.renderTiledMap(mapJson, pngPath, canvas);
+        }
+    }
+}
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 async function boot() {
     if (localStorage.getItem('bitsOnMap') === '1')
