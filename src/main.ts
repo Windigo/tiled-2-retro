@@ -27,7 +27,7 @@ function createWindow(): void {
   win.loadFile('index.html');
   win.setMenuBarVisibility(false);
   win.setMenu(null); // Remove default Electron menu entirely
-  win.webContents.openDevTools();
+  // win.webContents.openDevTools();
 }
 
 // ─── IPC: File dialogs for project workflow ──────────────────────────────────

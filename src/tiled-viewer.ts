@@ -36,14 +36,14 @@ async function renderTiledMap(mapJson: any, pngPath: string, canvas: HTMLCanvasE
     // Initialize visible layers (all visible by default)
     visibleLayers = mapJson.layers.map((l: any) => l.type !== 'tilelayer' || l.visible !== false);
 
-    // Store state for re-renders
-    currentState = { mapJson, tilesheet, canvas, zoom: 1 };
+    // Store state for re-renders (default 300% zoom for Amiga 320×256 screens)
+    currentState = { mapJson, tilesheet, canvas, zoom: 3 };
 
     // Render layer toggles
     updateLayerToggles(mapJson);
     // Render zoom
     const zl = document.getElementById('tiled-zoom-label');
-    if (zl) zl.textContent = '100%';
+    if (zl) zl.textContent = '300%';
 
     draw();
 }
@@ -128,8 +128,8 @@ function updateLayerToggles(mapJson: any) {
     el.innerHTML = mapJson.layers
         .filter((l: any) => l.type === 'tilelayer')
         .map((l: any, i: number) =>
-            `<label class="tv-layer${visibleLayers[i] ? '' : ' tv-off'}">
-                <input type="checkbox" data-idx="${i}" ${visibleLayers[i] ? 'checked' : ''}>
+            `<label class="tv-layer${visibleLayers[i] ? '' : ' tv-off'}" style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:3px 6px;border-radius:3px;font-size:11px;color:#a0b0c0;">
+                <input type="checkbox" data-idx="${i}" ${visibleLayers[i] ? 'checked' : ''} style="accent-color:#e94560;">
                 ${l.name || `Layer ${i+1}`}
             </label>`
         ).join('');

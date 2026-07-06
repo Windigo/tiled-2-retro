@@ -2079,7 +2079,7 @@ async function initTiledViewerTab() {
     const zoomInBtn = document.getElementById('tiled-zoom-in');
     const zoomOutBtn = document.getElementById('tiled-zoom-out');
     const canvasWrap = document.getElementById('tiled-canvas-wrap');
-    let currentZoom = 1;
+    let currentZoom = 3;
     // Zoom buttons
     if (zoomInBtn)
         zoomInBtn.addEventListener('click', () => {
