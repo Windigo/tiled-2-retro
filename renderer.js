@@ -258,6 +258,159 @@ End
 ${dataLines.join('\n')}
 `;
 }
+// ─── Game AB3 (sprite + joystick gameloop) ────────────────────────────────────
+function buildGameAb3(mapJson, bitplanes, spriteTileId, imageWidth, imageHeight) {
+    const tileSize = mapJson.tilewidth;
+    const mapCols = mapJson.width;
+    const mapRows = mapJson.height;
+    const cells = mapCols * mapRows;
+    const allTiles = [];
+    for (const layer of mapJson.layers) {
+        if (layer.type !== 'tilelayer' || !layer.data)
+            continue;
+        for (let i = 0; i < cells; i++) {
+            let gid = layer.data[i] || 0;
+            let tile = 0;
+            if (gid > 0) {
+                let bestFirstgid = 0;
+                for (const ts of mapJson.tilesets) {
+                    if (ts.firstgid <= gid && ts.firstgid > bestFirstgid)
+                        bestFirstgid = ts.firstgid;
+                }
+                tile = gid - bestFirstgid;
+            }
+            if (allTiles.length < cells)
+                allTiles.push(tile);
+            else
+                allTiles[i] = tile;
+        }
+    }
+    const dataLines = [];
+    for (let i = 0; i < allTiles.length; i += 16) {
+        dataLines.push(`Data.w ${allTiles.slice(i, i + 16).join(',')}`);
+    }
+    const ts0 = mapJson.tilesets?.[0];
+    const sheetW = imageWidth ?? ts0?.imagewidth ?? 320;
+    const sheetH = imageHeight ?? ts0?.imageheight ?? 256;
+    const sheetCols = Math.max(1, Math.floor(sheetW / tileSize));
+    const bp = bitplanes;
+    const iffFilename = `tiles_${bp}bp.iff`;
+    // Tile → sheet coordinates
+    const tId = spriteTileId;
+    const srcX = (tId % sheetCols) * tileSize;
+    const srcY = Math.floor(tId / sheetCols) * tileSize;
+    return `; ---------------------------------------------------------------
+; game.ab3 -- Game loop met sprite (tile ${spriteTileId}) + joystick
+; Tiled map export via RetroMapEditor
+; ---------------------------------------------------------------
+
+#MAP_COLS    = ${mapCols}
+#MAP_ROWS    = ${mapRows}
+#TILE_SIZE   = ${tileSize}
+#CELLS       = ${cells}
+#SHEET_COLS  = ${sheetCols}
+#SHEET_W     = ${sheetW}
+#SHEET_H     = ${sheetH}
+#BITPLANES   = ${bp}
+#SPRITE_TILE = ${spriteTileId}
+#SPRITE_SRCX = ${srcX}
+#SPRITE_SRCY = ${srcY}
+
+Dim tilemap.w(${cells})
+
+; ==============================================================
+; AMIGA mode: laad tilesheet, map data, bouw sprite
+; ==============================================================
+
+; --- Laad tilesheet IFF ---
+BitMap 0, ${sheetW}, ${sheetH}, #BITPLANES
+LoadBitMap 0, "${iffFilename}", 0
+
+; --- Lees map data ---
+Restore MapData
+For i = 0 To ${cells - 1}
+  Read tilemap(i)
+Next i
+
+; --- Bouw map op BitMap 1 ---
+BitMap 1, ${mapCols * tileSize}, ${mapRows * tileSize}, #BITPLANES
+
+For y = 0 To #MAP_ROWS - 1
+  For x = 0 To #MAP_COLS - 1
+    idx    = y * #MAP_COLS + x
+    tile.w = tilemap(idx)
+    If tile = 0 Then Goto skipBuild
+    sx.w = (tile MOD #SHEET_COLS) * #TILE_SIZE
+    sy.w = tile / #SHEET_COLS
+    sy   = sy * #TILE_SIZE
+    Use BitMap 0
+    GetaShape 0, sx, sy, #TILE_SIZE, #TILE_SIZE
+    Use BitMap 1
+    Blit 0, x * #TILE_SIZE, y * #TILE_SIZE
+    .skipBuild:
+  Next x
+Next y
+
+; --- Pak sprite-tile uit de sheet ---
+Use BitMap 0
+GetaShape 1, #SPRITE_SRCX, #SPRITE_SRCY, #TILE_SIZE, #TILE_SIZE
+GetaSprite 0, 1
+Free Shape 1
+
+VWait 50
+
+; ==============================================================
+; BLITZ mode: display + game loop
+; ==============================================================
+
+BLITZ
+
+; Display BitMap met map
+Slice 0, 44, #BITPLANES
+Use BitMap 0
+Use Palette 0
+Show 1
+
+; Sprite startpositie (midden scherm)
+spriteX.w = 156
+spriteY.w = 124
+
+; ==============================================================
+; Game loop
+; ==============================================================
+
+Repeat
+  ; --- Joystick in poort 1 ---
+  jx = Joyx(1)
+  jy = Joyy(1)
+
+  ; --- Beweeg sprite ---
+  If jx = -1 Then spriteX = spriteX - 2
+  If jx =  1 Then spriteX = spriteX + 2
+  If jy = -1 Then spriteY = spriteY - 2
+  If jy =  1 Then spriteY = spriteY + 2
+
+  ; --- Scherm-grenzen (hardware sprite = 16px breed) ---
+  If spriteX < 0   Then spriteX = 0
+  If spriteX > 304 Then spriteX = 304
+  If spriteY < 0   Then spriteY = 0
+  If spriteY > 248 Then spriteY = 248
+
+  ; --- Toon sprite op kanaal 0 ---
+  ShowSprite 0, spriteX, spriteY, 0
+
+  ; --- Wacht op VBlank (50fps PAL) ---
+  VWait
+
+Until Joyb(1) > 0
+
+AMIGA
+End
+
+.MapData:
+${dataLines.join('\n')}
+`;
+}
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────
 const tabTiledViewer = document.getElementById('tab-tiled-viewer');
 const tabPngIff = document.getElementById('tab-png-iff');
@@ -353,8 +506,10 @@ function initTiledViewerTab() {
         }
         const mapsAb3raw = buildTiledMapAb3(mapJson, bp, imgW, imgH);
         const mapsAb3Bytes = stringToAmigaBytes(mapsAb3raw);
-        const gameAb3Bytes = stringToAmigaBytes(buildTiledMapAb3(mapJson, bp, imgW, imgH));
-        const playerAb3Bytes = stringToAmigaBytes(`; player.ab3 (Tiled export) - not used, everything is in map.ab3\n`);
+        // Sprite tile ID (tile 459 = tile_id in Tiled, 0-based index 459)
+        // The sprite tile ID is passed as a constant to the generated game.ab3
+        const gameAb3Bytes = stringToAmigaBytes(buildGameAb3(mapJson, bp, 459, imgW, imgH));
+        const playerAb3Bytes = stringToAmigaBytes(`; player.ab3 (Tiled export) - not used, everything is in game.ab3\n`);
         if (!currentFolder) {
             showToast('No folder selected', 'error');
             return;
