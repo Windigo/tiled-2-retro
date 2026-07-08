@@ -164,24 +164,21 @@ function buildTiledMapAb3(mapJson, bitplanes, imageWidth, imageHeight) {
     const mapCols = mapJson.width;
     const mapRows = mapJson.height;
     const cells = mapCols * mapRows;
-    const allTiles = [];
+    const allTiles = new Array(cells).fill(0);
     for (const layer of mapJson.layers) {
         if (layer.type !== 'tilelayer' || !layer.data)
             continue;
         for (let i = 0; i < cells; i++) {
-            let gid = layer.data[i] || 0;
-            let tile = 0;
-            if (gid > 0) {
-                let bestFirstgid = 0;
-                for (const ts of mapJson.tilesets) {
-                    if (ts.firstgid <= gid && ts.firstgid > bestFirstgid)
-                        bestFirstgid = ts.firstgid;
-                }
-                tile = gid - bestFirstgid;
+            const gid = layer.data[i] || 0;
+            if (gid === 0)
+                continue; // don't overwrite with empty
+            let bestFirstgid = 0;
+            for (const ts of mapJson.tilesets) {
+                if (ts.firstgid <= gid && ts.firstgid > bestFirstgid)
+                    bestFirstgid = ts.firstgid;
             }
-            if (allTiles.length < cells)
-                allTiles.push(tile);
-            else
+            const tile = gid - bestFirstgid;
+            if (tile > 0)
                 allTiles[i] = tile;
         }
     }
@@ -264,24 +261,21 @@ function buildGameAb3(mapJson, bitplanes, spriteTileId, imageWidth, imageHeight)
     const mapCols = mapJson.width;
     const mapRows = mapJson.height;
     const cells = mapCols * mapRows;
-    const allTiles = [];
+    const allTiles = new Array(cells).fill(0);
     for (const layer of mapJson.layers) {
         if (layer.type !== 'tilelayer' || !layer.data)
             continue;
         for (let i = 0; i < cells; i++) {
-            let gid = layer.data[i] || 0;
-            let tile = 0;
-            if (gid > 0) {
-                let bestFirstgid = 0;
-                for (const ts of mapJson.tilesets) {
-                    if (ts.firstgid <= gid && ts.firstgid > bestFirstgid)
-                        bestFirstgid = ts.firstgid;
-                }
-                tile = gid - bestFirstgid;
+            const gid = layer.data[i] || 0;
+            if (gid === 0)
+                continue; // don't overwrite with empty
+            let bestFirstgid = 0;
+            for (const ts of mapJson.tilesets) {
+                if (ts.firstgid <= gid && ts.firstgid > bestFirstgid)
+                    bestFirstgid = ts.firstgid;
             }
-            if (allTiles.length < cells)
-                allTiles.push(tile);
-            else
+            const tile = gid - bestFirstgid;
+            if (tile > 0)
                 allTiles[i] = tile;
         }
     }
