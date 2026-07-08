@@ -10,7 +10,7 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1100,
     height: 700,
-    title: 'RetroMapEditor — AmiBlitz3 Map Tool',
+    title: 'Tiled2Retro — AmiBlitz3 Converter',
     resizable: true,
     fullscreen: true,
     webPreferences: {
@@ -113,7 +113,7 @@ ipcMain.handle('list-directory', async (_event: unknown, dirPath: string): Promi
 
 ipcMain.handle('export-amiga', async (
   _event: unknown,
-  data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapsAb3Data: number[]; gameAb3Data: number[]; playerAb3Data: number[] }
+  data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapsAb3Data: number[]; gameAb3Data: number[] }
 ): Promise<boolean> => {
   if (!isSafePath(data.projectFolder)) return false;
   try {
@@ -122,7 +122,6 @@ ipcMain.handle('export-amiga', async (
     fs.writeFileSync(path.join(amigaDir, `tiles_${data.iffBitplanes}bp.iff`), Buffer.from(data.iffData));
     fs.writeFileSync(path.join(amigaDir, 'maps.ab3'), Buffer.from(data.mapsAb3Data));
     fs.writeFileSync(path.join(amigaDir, 'game.ab3'), Buffer.from(data.gameAb3Data));
-    fs.writeFileSync(path.join(amigaDir, 'player.ab3'), Buffer.from(data.playerAb3Data));
     return true;
   } catch (err) {
     console.error('Failed to export Amiga files:', err);

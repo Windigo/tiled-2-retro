@@ -9,7 +9,7 @@ declare const editorApi: {
   loadPngFile: (filePath: string) => Promise<string | null>;
   readTextFile: (filePath: string) => Promise<string | null>;
   listDirectory: (dirPath: string) => Promise<{ path: string; folders: string[]; files: string[] } | null>;
-  exportAmiga: (data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapsAb3Data: number[]; gameAb3Data: number[]; playerAb3Data: number[] }) => Promise<boolean>;
+  exportAmiga: (data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapsAb3Data: number[]; gameAb3Data: number[] }) => Promise<boolean>;
 };
 
 // ─── Toast ─────────────────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ function buildTiledMapAb3(mapJson: any, bitplanes: number, imageWidth?: number, 
   const iffFilename = `tiles_${bp}bp.iff`;
 
   return `; ---------------------------------------------------------------
-; map.ab3 -- Tiled map export via RetroMapEditor
+; map.ab3 -- Tiled map export via Tiled2Retro
 ; Draw-only: laadt ${iffFilename} en tekent de map
 ; ---------------------------------------------------------------
 
@@ -328,7 +328,7 @@ function buildGameAb3(
 
   return `; ---------------------------------------------------------------
 ; game.ab3 -- Game loop met sprite (tile ${spriteTileId}) + joystick
-; Tiled map export via RetroMapEditor
+; Tiled map export via Tiled2Retro
 ; ---------------------------------------------------------------
 
 #MAP_COLS    = ${mapCols}
@@ -545,7 +545,6 @@ function initTiledViewerTab(): void {
     const gameAb3Bytes = stringToAmigaBytes(
       buildGameAb3(mapJson, bp, 459, imgW, imgH)
     );
-    const playerAb3Bytes = stringToAmigaBytes(`; player.ab3 (Tiled export) - not used, everything is in game.ab3\n`);
 
     if (!currentFolder) { showToast('No folder selected', 'error'); return; }
 
@@ -554,8 +553,7 @@ function initTiledViewerTab(): void {
       iffData: iffData ? Array.from(iffData) : [],
       iffBitplanes: bp,
       mapsAb3Data: Array.from(mapsAb3Bytes),
-      gameAb3Data: Array.from(gameAb3Bytes),
-      playerAb3Data: Array.from(playerAb3Bytes)
+      gameAb3Data: Array.from(gameAb3Bytes)
     });
 
     if (success) showToast(`Exported to amiga/ in ${currentFolder}`, 'success');

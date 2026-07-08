@@ -43,7 +43,7 @@ function createWindow() {
     const win = new electron_1.BrowserWindow({
         width: 1100,
         height: 700,
-        title: 'RetroMapEditor — AmiBlitz3 Map Tool',
+        title: 'Tiled2Retro — AmiBlitz3 Converter',
         resizable: true,
         fullscreen: true,
         webPreferences: {
@@ -156,7 +156,6 @@ electron_1.ipcMain.handle('export-amiga', async (_event, data) => {
         fs.writeFileSync(path.join(amigaDir, `tiles_${data.iffBitplanes}bp.iff`), Buffer.from(data.iffData));
         fs.writeFileSync(path.join(amigaDir, 'maps.ab3'), Buffer.from(data.mapsAb3Data));
         fs.writeFileSync(path.join(amigaDir, 'game.ab3'), Buffer.from(data.gameAb3Data));
-        fs.writeFileSync(path.join(amigaDir, 'player.ab3'), Buffer.from(data.playerAb3Data));
         return true;
     }
     catch (err) {

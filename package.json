@@ -1,7 +1,7 @@
 {
-  "name": "retro-map-editor",
-  "version": "2.0.0",
-  "description": "Retro Map Editor for AmiBlitz3 — Tiled Viewer + IFF Converter",
+  "name": "tiled2retro",
+  "version": "1.0.0",
+  "description": "Tiled2Retro — Tiled map to AmiBlitz3 converter + IFF Converter",
   "main": "main.js",
   "scripts": {
     "start": "tsc && tsc -p tsconfig.viewer.json && electron .",

@@ -22,7 +22,7 @@ const api = {
   listDirectory: (dirPath: string): Promise<{ path: string; folders: string[]; files: string[] } | null> =>
     ipcRenderer.invoke('list-directory', dirPath),
 
-  exportAmiga: (data: { projectFolder: string; iffData: number[]; mapsAb3Data: number[]; gameAb3Data: number[]; playerAb3Data: number[] }): Promise<boolean> =>
+  exportAmiga: (data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapsAb3Data: number[]; gameAb3Data: number[] }): Promise<boolean> =>
     ipcRenderer.invoke('export-amiga', data)
 };
 
