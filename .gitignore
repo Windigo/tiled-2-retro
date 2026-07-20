@@ -7,3 +7,4 @@ preload.js
 preload.js.map
 renderer.js
 renderer.js.map
+.DS_Store
