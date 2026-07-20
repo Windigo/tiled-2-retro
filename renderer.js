@@ -589,20 +589,23 @@ Repeat
       If player\\y < 0 Then player\\y = 0
     EndIf
     If jy = 1
-      ; Check of voeten na beweging op een FLOOR tile zouden staan
-      newFootY.w = player\\y + 2 + #TILE_SIZE
-      footTX.w  = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
-      footTY.w  = newFootY / #TILE_SIZE
-      fDownIdx = footTY * #MAP_COLS + footTX
-      canGoDown = 1
+      ; Klim omlaag: 2 px, check of we op een FLOOR tile terechtkomen
+      newY.w = player\\y + 2
+      footCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
+      footCheckY.w = (newY + #TILE_SIZE) / #TILE_SIZE
+      fDownIdx = footCheckY * #MAP_COLS + footCheckX
       If fDownIdx >= 0 AND fDownIdx < #CELLS
         If tilemap(fDownIdx) > 0 AND (tileflags(fDownIdx) & #FLAG_FLOOR)
-          canGoDown = 0
+          ; Sta op FLOOR tile -> clamp op top en ga naar walking
+          player\\y   = footCheckY * #TILE_SIZE - #TILE_SIZE
+          player\\vy  = 0
+          player\\state = 0
+          player\\onGround = 1
+          Goto skipState
         EndIf
       EndIf
-      If canGoDown = 1
-        player\\y = player\\y + 2
-      EndIf
+      ; Geen floor? Gewoon 2px omlaag
+      player\\y = newY
     EndIf
 
     player\\vy = 0
