@@ -8,6 +8,27 @@
 - Begin altijd met `blitzbasic_manuals/Guide_To_Blitz_Basic.md`.
 - Raadpleeg indien nodig aanvullende markdown-bestanden in dezelfde map voor extra context.
 
+## BlitzBasic / AmiBlitz codeer-conventies
+
+### Hoofdlettergevoeligheid (CRITICAL!)
+BlitzBasic/AmiBlitz is **strikt hoofdlettergevoelig** voor alle gereserveerde keywords:
+- **Logische operatoren**: `AND`, `OR`, `NOT` — **géén** `and`, `And`, `or`, `not`
+- **Control flow**: `IF`, `THEN`, `ELSE`, `ENDIF`, `FOR`, `TO`, `NEXT`, `WHILE`, `WEND`,
+  `REPEAT`, `UNTIL`, `GOTO`, `GOSUB`, `RETURN`, `POP`
+- **Type-definities**: `NEWTYPE`, `END NEWTYPE`, `DEFTYPE`
+- **Variabele types/suffixes** (`.b`, `.w`, `.l`, `.q`, `.f`, `.s`) en veld-accessor `\`
+  zijn hoofdletterongevoelig in de IDE (worden door de editor automatisch geformatteerd),
+  maar keywords als `AND`, `OR` etc. **moeten exact in HOOFDLETTERS**.
+
+De BlitzBasic-editor herkent keywords in lowercase NIET — de parser ziet `and` als
+een onbekende identifier en geeft een compileerfout.
+
+Gebruik dus altijd:
+```blitzbasic
+If x > 0 AND y < 10     ; correct
+If x > 0 And y < 10     ; FOUT — "And" wordt niet herkend
+```
+
 ## AmiBlitz3 / Amiga code-generatie
 
 Bij het genereren van AmiBlitz3-broncode (`.ab3`) of andere Amiga-tekstbestanden:
