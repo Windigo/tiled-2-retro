@@ -154,12 +154,21 @@ Repeat
   ; ==============================================================
   If player\state = 0
     ; --- Ladder climbing start? ---
-    ; Omhoog: altijd klimmen als je op/naast een ladder staat
-    ; Omlaag: alleen klimmen als je NIET op een FLOOR tile staat
+    ; Omhoog: alleen als er een LADDER tile boven het hoofd zit
+    ; Omlaag: alleen als je NIET op een FLOOR tile staat
     If onLadder = 1 AND jb = 0
       canClimb = 0
       If jy = -1
-        canClimb = 1
+        ; Check of de tile BOVEN het hoofd een LADDER is
+        headAboveY.w = (player\y - 2) / #TILE_SIZE
+        If headAboveY >= 0
+          upIdx = headAboveY * #MAP_COLS + midTileX
+          If upIdx >= 0 AND upIdx < #CELLS
+            If tileflags(upIdx) & #FLAG_LADDER
+              canClimb = 1
+            EndIf
+          EndIf
+        EndIf
       EndIf
       If jy = 1
         footCX.w = (player\x + #TILE_SIZE/2) / #TILE_SIZE
