@@ -392,39 +392,90 @@ VWait 50
 
 BLITZ
 
+; --- NEWTYPE voor de speler ---
+NEWTYPE .player
+  x.w
+  y.w
+  vy.w
+  onGround.w
+  speed.w
+  gravity.w
+  jumpForce.w
+End NEWTYPE
+
 ; Display BitMap met map
 Slice 0, 44, #BITPLANES
 Use BitMap 0
 Use Palette 0
 Show 1
 
-; Sprite startpositie (midden scherm)
-spriteX.w = 156
-spriteY.w = 124
+; --- Player initialisatie ---
+player.player\\x  = 156
+player\\y         = 124
+player\\vy        = 0
+player\\onGround  = 0
+player\\speed     = 2
+player\\gravity   = 1
+player\\jumpForce = 8
 
 ; ==============================================================
 ; Game loop
 ; ==============================================================
 
 Repeat
-  ; --- Joystick in poort 1 ---
+  ; --- Joystick horizontaal ---
   jx = Joyx(1)
+  If jx = -1 Then player\\x = player\\x - player\\speed
+  If jx =  1 Then player\\x = player\\x + player\\speed
+
+  ; --- Scherm-grenzen X (hardware sprite = 16px breed) ---
+  If player\\x < 0   Then player\\x = 0
+  If player\\x > 304 Then player\\x = 304
+
+  ; --- Jump (joystick omhoog) ---
   jy = Joyy(1)
+  If jy = -1 And player\\onGround = 1
+    player\\vy       = -player\\jumpForce
+    player\\onGround = 0
+  EndIf
 
-  ; --- Beweeg sprite ---
-  If jx = -1 Then spriteX = spriteX - 2
-  If jx =  1 Then spriteX = spriteX + 2
-  If jy = -1 Then spriteY = spriteY - 2
-  If jy =  1 Then spriteY = spriteY + 2
+  ; --- Gravity (accelererend) ---
+  If player\\onGround = 0
+    player\\vy = player\\vy + player\\gravity
+  EndIf
 
-  ; --- Scherm-grenzen (hardware sprite = 16px breed) ---
-  If spriteX < 0   Then spriteX = 0
-  If spriteX > 304 Then spriteX = 304
-  If spriteY < 0   Then spriteY = 0
-  If spriteY > 248 Then spriteY = 248
+  ; --- Pas verticale positie aan ---
+  player\\y = player\\y + player\\vy
 
-  ; --- Toon sprite op kanaal 0 ---
-  ShowSprite 0, spriteX, spriteY, 0
+  ; --- Floor collision: check tile onder sprite ---
+  tileX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
+  tileY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
+  tileIdx = tileY * #MAP_COLS + tileX
+  If tileIdx >= 0 And tileIdx < #CELLS
+    If tilemap(tileIdx) > 0
+      ; Sta op deze tile -> clamp
+      player\\y       = tileY * #TILE_SIZE - #TILE_SIZE
+      player\\vy      = 0
+      player\\onGround = 1
+    Else
+      player\\onGround = 0
+    EndIf
+  Else
+    player\\onGround = 0
+  EndIf
+
+  ; --- Scherm-grens onderkant (vangnet) ---
+  If player\\y > 248
+    player\\y       = 248
+    player\\vy      = 0
+    player\\onGround = 1
+  EndIf
+
+  ; --- Scherm-grens bovenkant ---
+  If player\\y < 0 Then player\\y = 0
+
+  ; --- Render sprite ---
+  ShowSprite 0, player\\x, player\\y, 0
 
   ; --- Wacht op VBlank (50fps PAL) ---
   VWait
