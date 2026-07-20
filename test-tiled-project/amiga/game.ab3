@@ -1,0 +1,254 @@
+; ---------------------------------------------------------------
+; game.ab3 -- Game loop met sprite (tile 459) + joystick
+; Tiled map export via Tiled2Retro
+; ---------------------------------------------------------------
+
+#MAP_COLS    = 20
+#MAP_ROWS    = 16
+#TILE_SIZE   = 16
+#CELLS       = 320
+#SHEET_COLS  = 49
+#SHEET_W     = 784
+#SHEET_H     = 352
+#BITPLANES   = 3
+#SPRITE_TILE = 459
+#SPRITE_SRCX = 288
+#SPRITE_SRCY = 144
+
+#FLAG_FLOOR  = 1
+#FLAG_WALL   = 2
+#MAX_VY      = 6
+
+Dim tilemap.w(320)
+Dim tileflags.w(320)
+
+; ==============================================================
+; AMIGA mode: laad tilesheet, map data, bouw sprite
+; ==============================================================
+
+; --- Laad tilesheet IFF ---
+BitMap 0, 784, 352, #BITPLANES
+LoadBitMap 0, "tiles_3bp.iff", 0
+
+; --- Lees map data ---
+Restore MapData
+For i = 0 To 319
+  Read tilemap(i)
+Next i
+
+; --- Lees tile flags ---
+Restore FlagData
+For i = 0 To 319
+  Read tileflags(i)
+Next i
+
+; --- Bouw map op BitMap 1 ---
+BitMap 1, 320, 256, #BITPLANES
+
+For y = 0 To #MAP_ROWS - 1
+  For x = 0 To #MAP_COLS - 1
+    idx    = y * #MAP_COLS + x
+    tile.w = tilemap(idx)
+    If tile = 0 Then Goto skipBuild
+    sx.w = (tile MOD #SHEET_COLS) * #TILE_SIZE
+    sy.w = tile / #SHEET_COLS
+    sy   = sy * #TILE_SIZE
+    Use BitMap 0
+    GetaShape 0, sx, sy, #TILE_SIZE, #TILE_SIZE
+    Use BitMap 1
+    Blit 0, x * #TILE_SIZE, y * #TILE_SIZE
+    .skipBuild:
+  Next x
+Next y
+
+; --- Pak sprite-tile uit de sheet ---
+Use BitMap 0
+GetaShape 1, #SPRITE_SRCX, #SPRITE_SRCY, #TILE_SIZE, #TILE_SIZE
+GetaSprite 0, 1
+Free Shape 1
+
+VWait 50
+
+; ==============================================================
+; BLITZ mode: display + game loop
+; ==============================================================
+
+BLITZ
+
+; --- NEWTYPE voor de speler ---
+NEWTYPE .player
+  x.w
+  y.w
+  vy.w
+  onGround.w
+  speed.w
+  gravity.w
+  jumpForce.w
+  maxVy.w
+End NEWTYPE
+
+; Display BitMap met map
+Slice 0, 44, #BITPLANES
+Use BitMap 0
+Use Palette 0
+Show 1
+
+; --- Player initialisatie ---
+player.player\x  = 156
+player\y         = 124
+player\vy        = 0
+player\onGround  = 0
+player\speed     = 2
+player\gravity   = 1
+player\jumpForce = 8
+player\maxVy     = #MAX_VY
+
+; ==============================================================
+; Game loop
+; ==============================================================
+
+Repeat
+  ; --- Joystick horizontaal met WALL collision ---
+  jx = Joyx(1)
+  If jx = -1
+    ; Check left edge tile for WALL
+    newX.w = player\x - player\speed
+    leftTileX.w = (newX) / #TILE_SIZE
+    topTileY.w = player\y / #TILE_SIZE
+    botTileY.w = (player\y + #TILE_SIZE - 1) / #TILE_SIZE
+    tileIdxL = topTileY * #MAP_COLS + leftTileX
+    tileIdxLB = botTileY * #MAP_COLS + leftTileX
+    wallLeft = 0
+    If tileIdxL >= 0 AND tileIdxL < #CELLS
+      f.w = tileflags(tileIdxL)
+      If f & #FLAG_WALL Then wallLeft = 1
+    EndIf
+    If tileIdxLB >= 0 AND tileIdxLB < #CELLS AND wallLeft = 0
+      f.w = tileflags(tileIdxLB)
+      If f & #FLAG_WALL Then wallLeft = 1
+    EndIf
+    If wallLeft = 0 Then player\x = newX
+  EndIf
+
+  If jx =  1
+    ; Check right edge tile for WALL
+    newX.w = player\x + player\speed
+    rightTileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
+    topTileY.w = player\y / #TILE_SIZE
+    botTileY.w = (player\y + #TILE_SIZE - 1) / #TILE_SIZE
+    tileIdxR = topTileY * #MAP_COLS + rightTileX
+    tileIdxRB = botTileY * #MAP_COLS + rightTileX
+    wallRight = 0
+    If tileIdxR >= 0 AND tileIdxR < #CELLS
+      f.w = tileflags(tileIdxR)
+      If f & #FLAG_WALL Then wallRight = 1
+    EndIf
+    If tileIdxRB >= 0 AND tileIdxRB < #CELLS AND wallRight = 0
+      f.w = tileflags(tileIdxRB)
+      If f & #FLAG_WALL Then wallRight = 1
+    EndIf
+    If wallRight = 0 Then player\x = newX
+  EndIf
+
+  ; --- Scherm-grenzen X (hardware sprite = 16px breed) ---
+  If player\x < 0   Then player\x = 0
+  If player\x > 304 Then player\x = 304
+
+  ; --- Jump (fire button) ---
+  If Joyb(1) = 1 AND player\onGround = 1
+    player\vy       = -player\jumpForce
+    player\onGround = 0
+  EndIf
+
+  ; --- Gravity (accelererend) met maximum valsnelheid ---
+  If player\onGround = 0
+    player\vy = player\vy + player\gravity
+    If player\vy > player\maxVy Then player\vy = player\maxVy
+  EndIf
+
+  ; --- Pas verticale positie aan ---
+  player\y = player\y + player\vy
+
+  ; --- Floor collision: check tile onder sprite (alleen FLOOR tiles stoppen val) ---
+  tileX.w = (player\x + #TILE_SIZE/2) / #TILE_SIZE
+  tileY.w = (player\y + #TILE_SIZE) / #TILE_SIZE
+  tileIdx = tileY * #MAP_COLS + tileX
+  If tileIdx >= 0 AND tileIdx < #CELLS
+    t.w = tilemap(tileIdx)
+    f.w = tileflags(tileIdx)
+    If t > 0 AND (f & #FLAG_FLOOR)
+      ; Sta op deze FLOOR tile -> clamp
+      player\y       = tileY * #TILE_SIZE - #TILE_SIZE
+      player\vy      = 0
+      player\onGround = 1
+    Else
+      player\onGround = 0
+    EndIf
+  Else
+    player\onGround = 0
+  EndIf
+
+  ; --- Scherm-grens onderkant (vangnet) ---
+  If player\y > 248
+    player\y       = 248
+    player\vy      = 0
+    player\onGround = 1
+  EndIf
+
+  ; --- Scherm-grens bovenkant ---
+  If player\y < 0 Then player\y = 0
+
+  ; --- Render sprite ---
+  ShowSprite 0, player\x, player\y, 0
+
+  ; --- Wacht op VBlank (50fps PAL) ---
+  VWait
+
+Until Joyb(1) = 2
+
+AMIGA
+End
+
+.MapData:
+Data.w 165,117,117,117,117,117,117,117,117,117,117,117,117,117,117,117
+Data.w 117,117,117,166,69,0,0,0,0,0,0,0,0,0,0,0
+Data.w 0,0,0,0,0,0,0,67,69,522,0,0,0,0,0,0
+Data.w 0,0,0,0,0,0,0,523,0,422,0,67,69,316,317,0
+Data.w 0,315,19,19,316,19,19,70,316,19,19,19,316,19,19,67
+Data.w 69,0,0,0,0,0,0,0,0,0,0,70,0,0,0,0
+Data.w 0,0,0,67,69,0,0,0,0,0,0,0,0,0,0,70
+Data.w 0,0,0,0,0,0,0,67,69,0,0,321,0,0,0,0
+Data.w 0,0,0,70,0,0,0,0,0,0,0,67,69,316,316,316
+Data.w 316,316,316,316,70,316,316,316,317,0,0,0,0,0,0,67
+Data.w 69,0,0,0,0,0,0,0,70,0,0,0,0,0,0,0
+Data.w 0,0,0,67,69,0,0,0,0,0,0,0,70,0,0,0
+Data.w 0,0,0,0,0,0,0,67,69,0,0,0,0,0,0,0
+Data.w 70,0,0,0,0,0,0,0,0,0,0,67,69,0,0,0
+Data.w 0,0,459,0,70,0,0,0,0,0,0,0,0,0,0,67
+Data.w 69,0,0,0,0,0,0,0,70,0,0,0,0,0,0,0
+Data.w 0,0,0,67,69,0,0,0,0,18,19,19,19,19,70,19
+Data.w 19,19,19,20,0,0,0,215,69,166,524,0,165,67,0,0
+Data.w 0,0,70,0,0,0,529,69,166,0,0,0,214,19,19,19
+Data.w 19,19,19,19,19,19,19,19,19,19,19,19,19,19,19,215
+
+.FlagData:
+Data.w 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+Data.w 0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0
+Data.w 0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0
+Data.w 0,0,0,0,0,0,0,0,0,0,0,2,2,1,1,0
+Data.w 0,1,1,1,1,1,1,4,1,1,1,1,1,1,1,2
+Data.w 2,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0
+Data.w 0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,4
+Data.w 0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0
+Data.w 0,0,0,4,0,0,0,0,0,0,0,2,2,1,1,1
+Data.w 1,1,1,1,4,1,1,1,1,0,0,0,0,0,0,2
+Data.w 2,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0
+Data.w 0,0,0,2,2,0,0,0,0,0,0,0,4,0,0,0
+Data.w 0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0
+Data.w 4,0,0,0,0,0,0,0,0,0,0,2,2,0,0,0
+Data.w 0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,2
+Data.w 2,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0
+Data.w 0,0,0,2,2,0,0,0,0,3,1,1,1,1,4,1
+Data.w 1,1,1,3,0,0,0,0,2,0,0,0,0,2,0,0
+Data.w 0,0,4,0,0,0,0,2,0,0,0,0,0,1,1,1
+Data.w 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0

@@ -1,5 +1,6 @@
 /**
  * Tiled Viewer — Renders a Tiled JSON map with zoom and layer toggles.
+ * Overlays colored indicators for custom FLAGS property (FLOOR=1, WALL=2, LADDER=4)
  */
 
 let currentState: {
@@ -9,9 +10,102 @@ let currentState: {
   zoom: number;
   pngPath: string;
   tilesets: Map<number, { image: HTMLImageElement; path: string }>;
+  /** GID (0-based tile id) → flags bitmask */
+  gidFlagsMap: Map<number, number>;
 } | null = null;
 
 let visibleLayers: boolean[] = [];
+let showFlagsOverlay: boolean = true;
+
+// Which individual flag bits to show in the overlay
+let flagVisibility: Record<string, boolean> = {
+  FLOOR: true,
+  WALL: true,
+  LADDER: true
+};
+
+// FLOOR=1, WALL=2, LADDER=4
+const FLAG_FLOOR = 1;
+const FLAG_WALL = 2;
+const FLAG_LADDER = 4;
+
+// Build GID (0-based tile id) → flags bitmask from tileset custom properties
+function buildGidFlagsMap(mapJson: any): Map<number, number> {
+  const flagsMap = new Map<number, number>();
+  for (const ts of mapJson.tilesets || []) {
+    const tiles = ts.tiles;
+    if (!tiles) continue;
+    for (const tileIdStr of Object.keys(tiles)) {
+      const localTileId = parseInt(tileIdStr, 10);
+      const tileData = tiles[tileIdStr];
+      const props = tileData.properties;
+      if (!props) continue;
+      for (const prop of props) {
+        if (prop.name.toUpperCase() === 'FLAGS' && (prop.type === 'enum' || prop.type === 'int') && typeof prop.value === 'number') {
+          flagsMap.set(localTileId, prop.value);
+        }
+      }
+    }
+  }
+  return flagsMap;
+}
+
+// Draw colored flag indicators on the canvas (call after tiles are drawn)
+// Only draws once per cell (topmost non-zero tile across layers wins), shows ALL flags
+// as small colored squares stacked vertically in the top-left corner
+function drawFlagsOverlay(ctx: CanvasRenderingContext2D, mapJson: any, gidFlagsMap: Map<number, number>, tileWidth: number, tileHeight: number, mapCols: number, mapRows: number) {
+  const cells = mapCols * mapRows;
+
+  // Collect first non-zero GID per cell (first visible layer wins)
+  const cellGids: number[] = new Array(cells).fill(0);
+  for (const layer of mapJson.layers) {
+    if (layer.type !== 'tilelayer' || !layer.data) continue;
+    const data = layer.data as number[];
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] !== 0 && cellGids[i] === 0) {
+        cellGids[i] = data[i];
+      }
+    }
+  }
+
+    // Small indicator square size (2px)
+    const sq = 2;
+
+    // Draw once per cell
+    for (let i = 0; i < cellGids.length; i++) {
+      const gid = cellGids[i];
+      if (gid === 0) continue;
+
+      let firstgid = 0;
+      for (const ts of mapJson.tilesets || []) {
+        if (ts.firstgid <= gid && ts.firstgid > firstgid) firstgid = ts.firstgid;
+      }
+      const localTileId = gid - firstgid;
+      const flags = gidFlagsMap.get(localTileId) || 0;
+      if (flags === 0) continue;
+
+      const dx = (i % mapCols) * tileWidth;
+      const dy = Math.floor(i / mapCols) * tileHeight;
+
+      // Draw one colored dot per active flag, side by side horizontally
+      let xOff = dx;
+      ctx.globalAlpha = 1;
+      if (flagVisibility.WALL && (flags & FLAG_WALL)) {
+        ctx.fillStyle = '#e94560'; // rood
+        ctx.fillRect(xOff, dy, sq, sq);
+        xOff += sq;
+      }
+      if (flagVisibility.LADDER && (flags & FLAG_LADDER)) {
+        ctx.fillStyle = '#16c79a'; // groen
+        ctx.fillRect(xOff, dy, sq, sq);
+        xOff += sq;
+      }
+      if (flagVisibility.FLOOR && (flags & FLAG_FLOOR)) {
+        ctx.fillStyle = '#0a84ff'; // blauw
+        ctx.fillRect(xOff, dy, sq, sq);
+      }
+    }
+}
 
 // Export accessor for renderer.ts
 (window as any).tiledGetExportData = (): {
@@ -58,11 +152,13 @@ async function renderTiledMap(mapJson: any, pngPath: string, canvas: HTMLCanvasE
     // Initialize visible layers (all visible by default)
     visibleLayers = mapJson.layers.map((l: any) => l.type !== 'tilelayer' || l.visible !== false);
 
-    // Store state for re-renders (default 300% zoom for Amiga 320×256 screens)
-    currentState = { mapJson, tilesheet, canvas, zoom: 3, pngPath, tilesets: new Map() };
+    // Build flags lookup and store state for re-renders (default 300% zoom for Amiga 320×256 screens)
+    const gidFlagsMap = buildGidFlagsMap(mapJson);
+    currentState = { mapJson, tilesheet, canvas, zoom: 3, pngPath, tilesets: new Map(), gidFlagsMap };
 
-    // Render layer toggles
+    // Render layer toggles & flag legend
     updateLayerToggles(mapJson);
+    renderFlagsLegend();
     // Render zoom
     const zl = document.getElementById('tiled-zoom-label');
     if (zl) zl.textContent = '300%';
@@ -121,6 +217,11 @@ function draw() {
     }
     ctx.globalAlpha = 1;
 
+    // Draw flags overlay on top of rendered tiles
+    if (showFlagsOverlay) {
+        drawFlagsOverlay(ctx, mapJson, currentState.gidFlagsMap, tileWidth, tileHeight, mapCols, mapRows);
+    }
+
     // Update status
     const st = document.getElementById('tiled-status');
     if (st) st.textContent = `Tilesheet: ${tilesheet.width}×${tilesheet.height} | drawn:${drawn} skipped:${skipped} | ${mapCols}×${mapRows} ${tileWidth}px | zoom:${Math.round(zoom*100)}%`;
@@ -162,6 +263,35 @@ function updateLayerToggles(mapJson: any) {
             toggleLayer(idx);
         });
     });
+}
+
+function renderFlagsLegend() {
+  const el = document.getElementById('tiled-flags-legend');
+  if (!el) return;
+
+  const flags = [
+    { key: 'FLOOR', label: 'Floor', color: '#0a84ff' },
+    { key: 'WALL', label: 'Wall', color: '#e94560' },
+    { key: 'LADDER', label: 'Ladder', color: '#16c79a' }
+  ];
+
+  el.innerHTML = flags.map(f =>
+    `<label class="tv-layer" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:3px 6px;border-radius:3px;font-size:11px;color:#a0b0c0;">
+      <input type="checkbox" data-flag="${f.key}" ${flagVisibility[f.key] ? 'checked' : ''} style="accent-color:${f.color};">
+      <span style="display:inline-block;width:8px;height:8px;background:${f.color};border-radius:1px;"></span>
+      ${f.label}
+    </label>`
+  ).join('');
+
+  el.querySelectorAll('input').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const flagKey = (cb as HTMLElement).dataset.flag!;
+      flagVisibility[flagKey] = (cb as HTMLInputElement).checked;
+      const label = cb.parentElement;
+      if (label) label.classList.toggle('tv-off', !flagVisibility[flagKey]);
+      draw();
+    });
+  });
 }
 
 // Expose globally

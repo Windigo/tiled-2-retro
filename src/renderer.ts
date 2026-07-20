@@ -282,6 +282,28 @@ ${dataLines.join('\n')}
 
 // ─── Game AB3 (sprite + joystick gameloop) ────────────────────────────────────
 
+// Build a tile → flags lookup map from tileset custom properties
+// FLAGS property is an enum with: FLOOR=1, WALL=2, LADDER=4
+function buildTileFlagsMap(mapJson: any): Map<number, number> {
+  const flagsMap = new Map<number, number>();
+  for (const ts of mapJson.tilesets || []) {
+    const tiles = ts.tiles;
+    if (!tiles) continue;
+    for (const tileIdStr of Object.keys(tiles)) {
+      const tileId = parseInt(tileIdStr, 10);
+      const tileData = tiles[tileIdStr];
+      const props = tileData.properties;
+      if (!props) continue;
+      for (const prop of props) {
+        if (prop.name.toUpperCase() === 'FLAGS' && (prop.type === 'enum' || prop.type === 'int') && typeof prop.value === 'number') {
+          flagsMap.set(tileId, prop.value);
+        }
+      }
+    }
+  }
+  return flagsMap;
+}
+
 function buildGameAb3(
   mapJson: any,
   bitplanes: number,
@@ -293,6 +315,13 @@ function buildGameAb3(
   const mapCols = mapJson.width;
   const mapRows = mapJson.height;
   const cells = mapCols * mapRows;
+
+  // Build tile → flags lookup
+  const tileFlagsMap = buildTileFlagsMap(mapJson);
+
+  // FLOOR=1, WALL=2, LADDER=4
+  const FLOOR = 1;
+  const WALL = 2;
 
   const allTiles: number[] = new Array(cells).fill(0);
   for (const layer of mapJson.layers) {
@@ -309,9 +338,23 @@ function buildGameAb3(
     }
   }
 
+  // Build tile flags array (parallel to allTiles)
+  const tileFlags: number[] = new Array(cells).fill(0);
+  for (let i = 0; i < cells; i++) {
+    const tileId = allTiles[i];
+    if (tileId > 0) {
+      tileFlags[i] = tileFlagsMap.get(tileId) || 0;
+    }
+  }
+
   const dataLines: string[] = [];
   for (let i = 0; i < allTiles.length; i += 16) {
     dataLines.push(`Data.w ${allTiles.slice(i, i + 16).join(',')}`);
+  }
+
+  const flagsLines: string[] = [];
+  for (let i = 0; i < tileFlags.length; i += 16) {
+    flagsLines.push(`Data.w ${tileFlags.slice(i, i + 16).join(',')}`);
   }
 
   const ts0 = mapJson.tilesets?.[0];
@@ -343,7 +386,12 @@ function buildGameAb3(
 #SPRITE_SRCX = ${srcX}
 #SPRITE_SRCY = ${srcY}
 
+#FLAG_FLOOR  = ${FLOOR}
+#FLAG_WALL   = ${WALL}
+#MAX_VY      = 6
+
 Dim tilemap.w(${cells})
+Dim tileflags.w(${cells})
 
 ; ==============================================================
 ; AMIGA mode: laad tilesheet, map data, bouw sprite
@@ -357,6 +405,12 @@ LoadBitMap 0, "${iffFilename}", 0
 Restore MapData
 For i = 0 To ${cells - 1}
   Read tilemap(i)
+Next i
+
+; --- Lees tile flags ---
+Restore FlagData
+For i = 0 To ${cells - 1}
+  Read tileflags(i)
 Next i
 
 ; --- Bouw map op BitMap 1 ---
@@ -401,6 +455,7 @@ NEWTYPE .player
   speed.w
   gravity.w
   jumpForce.w
+  maxVy.w
 End NEWTYPE
 
 ; Display BitMap met map
@@ -417,43 +472,83 @@ player\\onGround  = 0
 player\\speed     = 2
 player\\gravity   = 1
 player\\jumpForce = 8
+player\\maxVy     = #MAX_VY
 
 ; ==============================================================
 ; Game loop
 ; ==============================================================
 
 Repeat
-  ; --- Joystick horizontaal ---
+  ; --- Joystick horizontaal met WALL collision ---
   jx = Joyx(1)
-  If jx = -1 Then player\\x = player\\x - player\\speed
-  If jx =  1 Then player\\x = player\\x + player\\speed
+  If jx = -1
+    ; Check left edge tile for WALL
+    newX.w = player\\x - player\\speed
+    leftTileX.w = (newX) / #TILE_SIZE
+    topTileY.w = player\\y / #TILE_SIZE
+    botTileY.w = (player\\y + #TILE_SIZE - 1) / #TILE_SIZE
+    tileIdxL = topTileY * #MAP_COLS + leftTileX
+    tileIdxLB = botTileY * #MAP_COLS + leftTileX
+    wallLeft = 0
+    If tileIdxL >= 0 AND tileIdxL < #CELLS
+      f.w = tileflags(tileIdxL)
+      If f & #FLAG_WALL Then wallLeft = 1
+    EndIf
+    If tileIdxLB >= 0 AND tileIdxLB < #CELLS AND wallLeft = 0
+      f.w = tileflags(tileIdxLB)
+      If f & #FLAG_WALL Then wallLeft = 1
+    EndIf
+    If wallLeft = 0 Then player\\x = newX
+  EndIf
+
+  If jx =  1
+    ; Check right edge tile for WALL
+    newX.w = player\\x + player\\speed
+    rightTileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
+    topTileY.w = player\\y / #TILE_SIZE
+    botTileY.w = (player\\y + #TILE_SIZE - 1) / #TILE_SIZE
+    tileIdxR = topTileY * #MAP_COLS + rightTileX
+    tileIdxRB = botTileY * #MAP_COLS + rightTileX
+    wallRight = 0
+    If tileIdxR >= 0 AND tileIdxR < #CELLS
+      f.w = tileflags(tileIdxR)
+      If f & #FLAG_WALL Then wallRight = 1
+    EndIf
+    If tileIdxRB >= 0 AND tileIdxRB < #CELLS AND wallRight = 0
+      f.w = tileflags(tileIdxRB)
+      If f & #FLAG_WALL Then wallRight = 1
+    EndIf
+    If wallRight = 0 Then player\\x = newX
+  EndIf
 
   ; --- Scherm-grenzen X (hardware sprite = 16px breed) ---
   If player\\x < 0   Then player\\x = 0
   If player\\x > 304 Then player\\x = 304
 
-  ; --- Jump (joystick omhoog) ---
-  jy = Joyy(1)
-  If jy = -1 AND player\\onGround = 1
+  ; --- Jump (fire button) ---
+  If Joyb(1) = 1 AND player\\onGround = 1
     player\\vy       = -player\\jumpForce
     player\\onGround = 0
   EndIf
 
-  ; --- Gravity (accelererend) ---
+  ; --- Gravity (accelererend) met maximum valsnelheid ---
   If player\\onGround = 0
     player\\vy = player\\vy + player\\gravity
+    If player\\vy > player\\maxVy Then player\\vy = player\\maxVy
   EndIf
 
   ; --- Pas verticale positie aan ---
   player\\y = player\\y + player\\vy
 
-  ; --- Floor collision: check tile onder sprite ---
+  ; --- Floor collision: check tile onder sprite (alleen FLOOR tiles stoppen val) ---
   tileX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
   tileY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
   tileIdx = tileY * #MAP_COLS + tileX
   If tileIdx >= 0 AND tileIdx < #CELLS
-    If tilemap(tileIdx) > 0
-      ; Sta op deze tile -> clamp
+    t.w = tilemap(tileIdx)
+    f.w = tileflags(tileIdx)
+    If t > 0 AND (f & #FLAG_FLOOR)
+      ; Sta op deze FLOOR tile -> clamp
       player\\y       = tileY * #TILE_SIZE - #TILE_SIZE
       player\\vy      = 0
       player\\onGround = 1
@@ -480,13 +575,16 @@ Repeat
   ; --- Wacht op VBlank (50fps PAL) ---
   VWait
 
-Until Joyb(1) > 0
+Until Joyb(1) = 2
 
 AMIGA
 End
 
 .MapData:
 ${dataLines.join('\n')}
+
+.FlagData:
+${flagsLines.join('\n')}
 `;
 }
 
@@ -668,6 +766,49 @@ function initTiledViewerTab(): void {
       return;
     }
     const mapJson = JSON.parse(metaRaw);
+
+    // Inject tile properties from external .tsx tilesets into the JSON
+    if (mapJson.tilesets) {
+      for (const ts of mapJson.tilesets) {
+        if (ts.source && !ts.tiles) {
+          try {
+            const tsxRaw = await editorApi.readTextFile(currentFolder + '/' + ts.source);
+            if (tsxRaw) {
+              // Parse tile properties from TSX XML
+              const tileRegex = /<tile\s+id="(\d+)"[^>]*>([\s\S]*?)<\/tile>/g;
+              const tiles: Record<string, any> = {};
+              let match;
+              while ((match = tileRegex.exec(tsxRaw)) !== null) {
+                const tileId = match[1];
+                const inner = match[2];
+                const propsRegex = /<property\s+name="([^"]*)"\s+type="([^"]*)"[^>]*\s+value="([^"]*)"/g;
+                const properties: any[] = [];
+                let propMatch;
+                while ((propMatch = propsRegex.exec(inner)) !== null) {
+                  properties.push({
+                    name: propMatch[1],
+                    type: propMatch[2],
+                    value: parseInt(propMatch[3], 10)
+                  });
+                }
+                if (properties.length > 0) {
+                  tiles[tileId] = { properties };
+                }
+              }
+              if (Object.keys(tiles).length > 0) {
+                ts.tiles = tiles;
+              }
+              // Extract image dimensions from TSX
+              const imgMatch = tsxRaw.match(/<image\s+source="([^"]+)"\s+width="(\d+)"\s+height="(\d+)"/);
+              if (imgMatch) {
+                ts.imagewidth = parseInt(imgMatch[2], 10);
+                ts.imageheight = parseInt(imgMatch[3], 10);
+              }
+            }
+          } catch {}
+        }
+      }
+    }
 
     if (!pngPath) {
       const ts = mapJson.tilesets?.[0];

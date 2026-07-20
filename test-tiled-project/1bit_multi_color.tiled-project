@@ -1,0 +1,40 @@
+{
+    "automappingRulesFile": "",
+    "commands": [
+    ],
+    "compatibilityVersion": 1100,
+    "extensionsPath": "extensions",
+    "folders": [
+        "."
+    ],
+    "properties": [
+        {
+            "name": "FLOOR",
+            "type": "int",
+            "value": 1
+        }
+    ],
+    "propertyTypes": [
+        {
+            "id": 1,
+            "name": "TileFlags",
+            "storageType": "int",
+            "type": "enum",
+            "values": [
+                "FLOOR",
+                "WALL",
+                "LADDER"
+            ],
+            "valuesAsFlags": true
+        },
+        {
+            "id": 2,
+            "name": "Enum1",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+            ],
+            "valuesAsFlags": false
+        }
+    ]
+}
