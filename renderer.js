@@ -596,12 +596,12 @@ Repeat
       Goto skipState
     EndIf
 
-    ; --- Geen ladder meer? -> check rijen op FLOOR/LADDER onder voeten ---
+    ; --- Geen ladder meer? -> check op FLOOR/LADDER onder voeten ---
     If onLadder = 0
       footCX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
       footCY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
 
-      ; Rij 0 (huidig) — FLOOR of LADDER
+      ; Rij 0 (huidig)
       fIdx = footCY * #MAP_COLS + footCX
       If fIdx >= 0 AND fIdx < #CELLS
         If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
@@ -618,18 +618,6 @@ Repeat
       If fIdx >= 0 AND fIdx < #CELLS
         If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
           player\\y   = (footCY + 1) * #TILE_SIZE - #TILE_SIZE
-          player\\vy  = 0
-          player\\state = 0
-          player\\onGround = 1
-          Goto skipState
-        EndIf
-      EndIf
-
-      ; Rij +2
-      fIdx = (footCY + 2) * #MAP_COLS + footCX
-      If fIdx >= 0 AND fIdx < #CELLS
-        If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
-          player\\y   = (footCY + 2) * #TILE_SIZE - #TILE_SIZE
           player\\vy  = 0
           player\\state = 0
           player\\onGround = 1
@@ -654,7 +642,6 @@ Repeat
       fDownIdx = footCheckY * #MAP_COLS + footCheckX
       If fDownIdx >= 0 AND fDownIdx < #CELLS
         If tilemap(fDownIdx) > 0 AND (tileflags(fDownIdx) & #FLAG_FLOOR)
-          ; Sta op FLOOR tile -> clamp op top en ga naar walking
           player\\y   = footCheckY * #TILE_SIZE - #TILE_SIZE
           player\\vy  = 0
           player\\state = 0
@@ -662,7 +649,6 @@ Repeat
           Goto skipState
         EndIf
       EndIf
-      ; Geen floor? Gewoon 2px omlaag
       player\\y = newY
     EndIf
 
@@ -777,12 +763,12 @@ Repeat
       If canMove = 1 Then player\\x = newX
     EndIf
 
-    ; Floor collision check
+    ; Floor collision check (FLOOR of LADDER)
     fCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
     fCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
     fIdx = fCheckY * #MAP_COLS + fCheckX
     If fIdx >= 0 AND fIdx < #CELLS
-      If tilemap(fIdx) > 0 AND (tileflags(fIdx) & #FLAG_FLOOR)
+      If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
         player\\y   = fCheckY * #TILE_SIZE - #TILE_SIZE
         player\\vy  = 0
         player\\state     = 0 ; land -> walking
