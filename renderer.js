@@ -490,11 +490,30 @@ Repeat
   ; ==============================================================
   If player\\state = 0
     ; --- Ladder climbing start? ---
-    If onLadder = 1 AND jb = 0 AND (jy = -1 OR jy = 1)
-      player\\state = 1
-      ; Snap X naar linkerrand van de ladder tile (alleen bij transitie)
-      player\\x = midTileX * #TILE_SIZE
-      Goto skipState
+    ; Omhoog: altijd klimmen als je op/naast een ladder staat
+    ; Omlaag: alleen klimmen als je NIET op een FLOOR tile staat
+    If onLadder = 1 AND jb = 0
+      canClimb = 0
+      If jy = -1
+        canClimb = 1
+      EndIf
+      If jy = 1
+        footCX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
+        footCY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
+        fIdx = footCY * #MAP_COLS + footCX
+        If fIdx >= 0 AND fIdx < #CELLS
+          If tilemap(fIdx) = 0 OR (tileflags(fIdx) & #FLAG_FLOOR) = 0
+            canClimb = 1
+          EndIf
+        Else
+          canClimb = 1
+        EndIf
+      EndIf
+      If canClimb = 1
+        player\\state = 1
+        player\\x = midTileX * #TILE_SIZE
+        Goto skipState
+      EndIf
     EndIf
 
     ; --- Jump start? (edge-triggered) ---
