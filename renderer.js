@@ -544,13 +544,13 @@ Repeat
         If canMove = 1 Then player\\x = newX
       EndIf
 
-      ; Check of speler nog op vloer staat
+      ; Check of speler nog op vloer staat (FLOOR of LADDER)
       footCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
       footCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
       fIdx = footCheckY * #MAP_COLS + footCheckX
       If fIdx >= 0 AND fIdx < #CELLS
-        If tilemap(fIdx) > 0 AND (tileflags(fIdx) & #FLAG_FLOOR)
-          ; op vloer - blijf walking
+        If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
+          ; op vloer of ladder - blijf walking
         Else
           ; zwevend -> start falling
           player\\state = 3
@@ -564,82 +564,45 @@ Repeat
   EndIf
 
   ; ==============================================================
-  ; STATE 1: CLIMBING
+  ; STATE 1: CLIMBING (alleen omhoog/omlaag op ladder)
   ; ==============================================================
   If player\\state = 1
-    ; Exit climbing if fire pressed
-    If jb <> 0
-      player\\state = 0
-      player\\vy = 0
+    ; --- Jump van ladder af (fire button) ---
+    If jb = 1 AND player\\jumpPressed = 0
+      player\\vy           = -player\\jumpForce
+      player\\onGround     = 0
+      player\\jumpPressed   = 1
+      player\\jumpHold      = 0
+      player\\state        = 2
       Goto skipState
     EndIf
 
-    ; Check of we nog op/naast een ladder zitten
-    ; Ook bovenaan: als hoofd-tile een ladder heeft, blijven we climben
-    headTileY.w = (player\\y - 1) / #TILE_SIZE
-    If onLadder = 0 AND headTileY >= 0
-      hIdx = headTileY * #MAP_COLS + midTileX
-      If hIdx >= 0 AND hIdx < #CELLS
-        f.w = tileflags(hIdx)
-        If f & #FLAG_LADDER Then onLadder = 1
-      EndIf
-    EndIf
+    ; --- Geen ladder meer? -> vallen ---
     If onLadder = 0
       player\\state = 3
       Goto skipState
     EndIf
 
-    ; Klimmen: 2 px per frame
+    ; --- Klimmen: 2 px per frame ---
     If jy = -1
       player\\y = player\\y - 2
       If player\\y < 0 Then player\\y = 0
     EndIf
     If jy = 1
-      ; Check of we niet door een FLOOR zakken
+      ; Check of voeten na beweging op een FLOOR tile zouden staan
       newFootY.w = player\\y + 2 + #TILE_SIZE
-      footTX.w  = midTileX
+      footTX.w  = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
       footTY.w  = newFootY / #TILE_SIZE
       fDownIdx = footTY * #MAP_COLS + footTX
       canGoDown = 1
       If fDownIdx >= 0 AND fDownIdx < #CELLS
         If tilemap(fDownIdx) > 0 AND (tileflags(fDownIdx) & #FLAG_FLOOR)
-          ; Sta al op/onder een FLOOR tile, niet verder klimmen
           canGoDown = 0
         EndIf
       EndIf
       If canGoDown = 1
         player\\y = player\\y + 2
       EndIf
-    EndIf
-
-    ; Horizontale beweging: alleen WALLs blokkeren
-    If jx = -1
-      newX.w = player\\x - player\\speed
-      tileX.w = newX / #TILE_SIZE
-      tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
-      tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
-      canMove = 1
-      If tIdx1 >= 0 AND tIdx1 < #CELLS
-        If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
-        If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If canMove = 1 Then player\\x = newX
-    EndIf
-    If jx = 1
-      newX.w = player\\x + player\\speed
-      tileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
-      tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
-      tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
-      canMove = 1
-      If tIdx1 >= 0 AND tIdx1 < #CELLS
-        If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
-        If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If canMove = 1 Then player\\x = newX
     EndIf
 
     player\\vy = 0
