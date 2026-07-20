@@ -492,7 +492,8 @@ Repeat
     ; --- Ladder climbing start? ---
     If onLadder = 1 AND jb = 0 AND (jy = -1 OR jy = 1)
       player\\state = 1
-      player\\ladderTimer = 0
+      ; Snap X naar linkerrand van de ladder tile (alleen bij transitie)
+      player\\x = midTileX * #TILE_SIZE
       Goto skipState
     EndIf
 
@@ -573,14 +574,20 @@ Repeat
       Goto skipState
     EndIf
 
-    ; Check of we nog op een ladder zitten
+    ; Check of we nog op/naast een ladder zitten
+    ; Ook bovenaan: als hoofd-tile een ladder heeft, blijven we climben
+    headTileY.w = (player\\y - 1) / #TILE_SIZE
+    If onLadder = 0 AND headTileY >= 0
+      hIdx = headTileY * #MAP_COLS + midTileX
+      If hIdx >= 0 AND hIdx < #CELLS
+        f.w = tileflags(hIdx)
+        If f & #FLAG_LADDER Then onLadder = 1
+      EndIf
+    EndIf
     If onLadder = 0
       player\\state = 3
       Goto skipState
     EndIf
-
-    ; Snap X naar midden van de ladder tile
-    player\\x = midTileX * #TILE_SIZE
 
     ; Klimmen: 2 px per frame
     If jy = -1
@@ -588,10 +595,24 @@ Repeat
       If player\\y < 0 Then player\\y = 0
     EndIf
     If jy = 1
-      player\\y = player\\y + 2
+      ; Check of we niet door een FLOOR zakken
+      newFootY.w = player\\y + 2 + #TILE_SIZE
+      footTX.w  = midTileX
+      footTY.w  = newFootY / #TILE_SIZE
+      fDownIdx = footTY * #MAP_COLS + footTX
+      canGoDown = 1
+      If fDownIdx >= 0 AND fDownIdx < #CELLS
+        If tilemap(fDownIdx) > 0 AND (tileflags(fDownIdx) & #FLAG_FLOOR)
+          ; Sta al op/onder een FLOOR tile, niet verder klimmen
+          canGoDown = 0
+        EndIf
+      EndIf
+      If canGoDown = 1
+        player\\y = player\\y + 2
+      EndIf
     EndIf
 
-    ; Horizontale beweging: alleen WALLs blokkeren, ladder verlaten mag gewoon
+    ; Horizontale beweging: alleen WALLs blokkeren
     If jx = -1
       newX.w = player\\x - player\\speed
       tileX.w = newX / #TILE_SIZE
