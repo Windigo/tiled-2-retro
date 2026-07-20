@@ -521,6 +521,7 @@ Repeat
       If canClimb = 1
         player\\state = 1
         player\\x = midTileX * #TILE_SIZE
+        player\\jumpPressed = 0
         Goto skipState
       EndIf
     EndIf
@@ -772,15 +773,15 @@ Repeat
       If canMove = 1 Then player\\x = newX
     EndIf
 
-    ; Floor collision check (FLOOR of LADDER)
+    ; Floor collision check (alleen FLOOR — LADDER stopt vallen niet)
     fCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
     fCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
     fIdx = fCheckY * #MAP_COLS + fCheckX
     If fIdx >= 0 AND fIdx < #CELLS
-      If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
+      If tilemap(fIdx) > 0 AND (tileflags(fIdx) & #FLAG_FLOOR)
         player\\y   = fCheckY * #TILE_SIZE - #TILE_SIZE
         player\\vy  = 0
-        player\\state     = 0 ; land -> walking
+        player\\state = 0 ; land -> walking
         player\\jumpPressed = 0
       EndIf
     EndIf
