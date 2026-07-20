@@ -260,13 +260,52 @@ Repeat
       Goto skipState
     EndIf
 
-    ; --- Geen ladder meer? -> vallen ---
+    ; --- Geen ladder meer? -> check rijen op FLOOR/LADDER onder voeten ---
     If onLadder = 0
+      footCX.w = (player\x + #TILE_SIZE/2) / #TILE_SIZE
+      footCY.w = (player\y + #TILE_SIZE) / #TILE_SIZE
+
+      ; Rij 0 (huidig) ? FLOOR of LADDER
+      fIdx = footCY * #MAP_COLS + footCX
+      If fIdx >= 0 AND fIdx < #CELLS
+        If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
+          player\y   = footCY * #TILE_SIZE - #TILE_SIZE
+          player\vy  = 0
+          player\state = 0
+          player\onGround = 1
+          Goto skipState
+        EndIf
+      EndIf
+
+      ; Rij +1
+      fIdx = (footCY + 1) * #MAP_COLS + footCX
+      If fIdx >= 0 AND fIdx < #CELLS
+        If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
+          player\y   = (footCY + 1) * #TILE_SIZE - #TILE_SIZE
+          player\vy  = 0
+          player\state = 0
+          player\onGround = 1
+          Goto skipState
+        EndIf
+      EndIf
+
+      ; Rij +2
+      fIdx = (footCY + 2) * #MAP_COLS + footCX
+      If fIdx >= 0 AND fIdx < #CELLS
+        If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
+          player\y   = (footCY + 2) * #TILE_SIZE - #TILE_SIZE
+          player\vy  = 0
+          player\state = 0
+          player\onGround = 1
+          Goto skipState
+        EndIf
+      EndIf
+
       player\state = 3
       Goto skipState
     EndIf
 
-    ; --- Klimmen: 2 px per frame ---
+    ; --- Klimmen omhoog: 2 px per frame ---
     If jy = -1
       player\y = player\y - 2
       If player\y < 0 Then player\y = 0
