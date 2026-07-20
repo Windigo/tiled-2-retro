@@ -434,7 +434,7 @@ Repeat
 
   ; --- Jump (joystick omhoog) ---
   jy = Joyy(1)
-  If jy = -1 And player\\onGround = 1
+  If jy = -1 AND player\\onGround = 1
     player\\vy       = -player\\jumpForce
     player\\onGround = 0
   EndIf
@@ -451,7 +451,7 @@ Repeat
   tileX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
   tileY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
   tileIdx = tileY * #MAP_COLS + tileX
-  If tileIdx >= 0 And tileIdx < #CELLS
+  If tileIdx >= 0 AND tileIdx < #CELLS
     If tilemap(tileIdx) > 0
       ; Sta op deze tile -> clamp
       player\\y       = tileY * #TILE_SIZE - #TILE_SIZE
