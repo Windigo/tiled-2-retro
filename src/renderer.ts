@@ -602,52 +602,57 @@ Repeat
   ; STATE 1: CLIMBING
   ; ==============================================================
   If player\\state = 1
-    ; Exit climbing if fire pressed or off ladder
+    ; Exit climbing if fire pressed
     If jb <> 0
       player\\state = 0
       player\\vy = 0
       Goto skipState
     EndIf
+
+    ; Check of we nog op een ladder zitten
     If onLadder = 0
       player\\state = 3
       Goto skipState
     EndIf
 
-    ; Klim beweging (1 px per 3 frames)
-    player\\ladderTimer = player\\ladderTimer + 1
-    If player\\ladderTimer >= 3
-      player\\ladderTimer = 0
-      If jy = -1
-        player\\y = player\\y - 1
-        If player\\y < 0 Then player\\y = 0
-      EndIf
-      If jy = 1
-        player\\y = player\\y + 1
-      EndIf
+    ; Snap X naar midden van de ladder tile
+    player\\x = midTileX * #TILE_SIZE
+
+    ; Klimmen: 2 px per frame
+    If jy = -1
+      player\\y = player\\y - 2
+      If player\\y < 0 Then player\\y = 0
+    EndIf
+    If jy = 1
+      player\\y = player\\y + 2
     EndIf
 
-    ; Horizontale beweging op ladder
+    ; Horizontale beweging: alleen WALLs blokkeren, ladder verlaten mag gewoon
     If jx = -1
       newX.w = player\\x - player\\speed
       tileX.w = newX / #TILE_SIZE
-      tIdx = bodyTileY * #MAP_COLS + tileX
+      tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
+      tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
       canMove = 1
-      If tIdx >= 0 AND tIdx < #CELLS
-        f.w = tileflags(tIdx)
-        If (f & #FLAG_WALL) = 0 AND (f & #FLAG_LADDER) Then canMove = 0
-        If f & #FLAG_WALL Then canMove = 0
+      If tIdx1 >= 0 AND tIdx1 < #CELLS
+        If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
+      EndIf
+      If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
+        If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
       EndIf
       If canMove = 1 Then player\\x = newX
     EndIf
     If jx = 1
       newX.w = player\\x + player\\speed
       tileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
-      tIdx = bodyTileY * #MAP_COLS + tileX
+      tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
+      tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
       canMove = 1
-      If tIdx >= 0 AND tIdx < #CELLS
-        f.w = tileflags(tIdx)
-        If (f & #FLAG_WALL) = 0 AND (f & #FLAG_LADDER) Then canMove = 0
-        If f & #FLAG_WALL Then canMove = 0
+      If tIdx1 >= 0 AND tIdx1 < #CELLS
+        If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
+      EndIf
+      If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
+        If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
       EndIf
       If canMove = 1 Then player\\x = newX
     EndIf
