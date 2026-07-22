@@ -9,7 +9,7 @@ declare const editorApi: {
   loadPngFile: (filePath: string) => Promise<string | null>;
   readTextFile: (filePath: string) => Promise<string | null>;
   listDirectory: (dirPath: string) => Promise<{ path: string; folders: string[]; files: string[] } | null>;
-  exportAmiga: (data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapsAb3Data: number[]; gameAb3Data: number[] }) => Promise<boolean>;
+  exportAmiga: (data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapdataAb3Data: number[]; gameAb3Data: number[] }) => Promise<boolean>;
 };
 
 // ─── Toast ─────────────────────────────────────────────────────────────────
@@ -847,6 +847,56 @@ Until Joyb(1) = 2
 AMIGA
 End
 
+XINCLUDE "mapdata.ab3"
+`;
+}
+
+// ─── Mapdata AB3 (alleen .MapData en .FlagData labels) ────────────────────────
+
+function buildMapdataAb3(mapJson: any): string {
+  const mapCols = mapJson.width;
+  const mapRows = mapJson.height;
+  const cells = mapCols * mapRows;
+  const tileFlagsMap = buildTileFlagsMap(mapJson);
+
+  const allTiles: number[] = new Array(cells).fill(0);
+  for (const layer of mapJson.layers) {
+    if (layer.type !== 'tilelayer' || !layer.data) continue;
+    for (let i = 0; i < cells; i++) {
+      const gid = layer.data[i] || 0;
+      if (gid === 0) continue;
+      let bestFirstgid = 0;
+      for (const ts of mapJson.tilesets) {
+        if (ts.firstgid <= gid && ts.firstgid > bestFirstgid) bestFirstgid = ts.firstgid;
+      }
+      const tile = gid - bestFirstgid;
+      if (tile > 0) allTiles[i] = tile;
+    }
+  }
+
+  const tileFlags: number[] = new Array(cells).fill(0);
+  for (let i = 0; i < cells; i++) {
+    const tileId = allTiles[i];
+    if (tileId > 0) {
+      tileFlags[i] = tileFlagsMap.get(tileId) || 0;
+    }
+  }
+
+  const dataLines: string[] = [];
+  for (let i = 0; i < allTiles.length; i += 16) {
+    dataLines.push(`Data.w ${allTiles.slice(i, i + 16).join(',')}`);
+  }
+
+  const flagsLines: string[] = [];
+  for (let i = 0; i < tileFlags.length; i += 16) {
+    flagsLines.push(`Data.w ${tileFlags.slice(i, i + 16).join(',')}`);
+  }
+
+  return `; ---------------------------------------------------------------
+; mapdata.ab3 -- Map data en tile flags
+; Tiled map export via Tiled2Retro
+; ---------------------------------------------------------------
+
 .MapData:
 ${dataLines.join('\n')}
 
@@ -953,8 +1003,8 @@ function initTiledViewerTab(): void {
       iffData = buildIffFromImage(image, bp).iff;
     }
 
-    const mapsAb3raw = buildTiledMapAb3(mapJson, bp, imgW, imgH);
-    const mapsAb3Bytes = stringToAmigaBytes(mapsAb3raw);
+    const mapdataAb3raw = buildMapdataAb3(mapJson);
+    const mapdataAb3Bytes = stringToAmigaBytes(mapdataAb3raw);
 
     // Sprite tile ID (tile 459 = tile_id in Tiled, 0-based index 459)
     // The sprite tile ID is passed as a constant to the generated game.ab3
@@ -968,7 +1018,7 @@ function initTiledViewerTab(): void {
       projectFolder: currentFolder,
       iffData: iffData ? Array.from(iffData) : [],
       iffBitplanes: bp,
-      mapsAb3Data: Array.from(mapsAb3Bytes),
+      mapdataAb3Data: Array.from(mapdataAb3Bytes),
       gameAb3Data: Array.from(gameAb3Bytes)
     });
 

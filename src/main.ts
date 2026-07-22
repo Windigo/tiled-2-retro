@@ -113,14 +113,14 @@ ipcMain.handle('list-directory', async (_event: unknown, dirPath: string): Promi
 
 ipcMain.handle('export-amiga', async (
   _event: unknown,
-  data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapsAb3Data: number[]; gameAb3Data: number[] }
+  data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapdataAb3Data: number[]; gameAb3Data: number[] }
 ): Promise<boolean> => {
   if (!isSafePath(data.projectFolder)) return false;
   try {
     const amigaDir = path.join(data.projectFolder, 'amiga');
     fs.mkdirSync(amigaDir, { recursive: true });
     fs.writeFileSync(path.join(amigaDir, `tiles_${data.iffBitplanes}bp.iff`), Buffer.from(data.iffData));
-    fs.writeFileSync(path.join(amigaDir, 'maps.ab3'), Buffer.from(data.mapsAb3Data));
+    fs.writeFileSync(path.join(amigaDir, 'mapdata.ab3'), Buffer.from(data.mapdataAb3Data));
     fs.writeFileSync(path.join(amigaDir, 'game.ab3'), Buffer.from(data.gameAb3Data));
     return true;
   } catch (err) {
