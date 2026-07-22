@@ -59,3 +59,35 @@ Bij het genereren van AmiBlitz3-broncode (`.ab3`) of andere Amiga-tekstbestanden
   niet als getokeniseerd project geopend.
 - Bestandsnamen (AmigaDOS): kort houden, gereserveerde tekens `:` en `/` vermijden,
   en op oude OFS/FFS-volumes namen > ~30 tekens vermijden.
+
+### XINCLUDE plaatsing (CRITICAL!)
+`XINCLUDE` voegt de inhoud van een ander bestand letterlijk in op de plek van de
+include-directive. De plaatsing is afhankelijk van wat er in het ingevoegde
+bestand staat:
+
+- **Data-labels (`.MapData:`, `.FlagData:`, etc.)** — Deze moeten **na `End`**
+  komen, omdat AmiBlitz3 labels na `End` verwacht. Zet `XINCLUDE` voor
+  data-bestanden dus **direct na `End`**, niet bovenaan het bestand:
+  ```blitzbasic
+  AMIGA
+  End
+
+  XINCLUDE "mapdata.ab3"
+  ```
+
+- **Code (procedures, functies, subroutines)** — Deze moeten **vóór de code
+  die ze aanroept** staan. Zet `XINCLUDE` voor code-bestanden dus **bovenaan**
+  het bestand, of in ieder geval vóór de eerste aanroep:
+  ```blitzbasic
+  XINCLUDE "player.ab3"
+
+  ; hoofdcode die player-procedures aanroept
+  Gosub InitPlayer
+  ```
+
+- **Constanten (`#` defines)** — Deze moeten vóór gebruik gedeclareerd zijn,
+  dus een `XINCLUDE` met constanten moet **bovenaan** of vóór de eerste
+  referentie staan.
+
+**Vuistregel**: Bepaal altijd wat het ingevoegde bestand bevat (code of data),
+en plaats `XINCLUDE` op de positie waar die inhoud in het hoofdprogramma thuishoort.
