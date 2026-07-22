@@ -6,9 +6,9 @@
     "fileStates": {
         "level1.json": {
             "scale": 2.28296875,
-            "selectedLayer": 0,
+            "selectedLayer": 1,
             "viewCenter": {
-                "x": 159.87954281021146,
+                "x": 215.2898501129286,
                 "y": 128.12264732051193
             }
         },
@@ -17,6 +17,10 @@
             "scaleInEditor": 1
         }
     },
+    "map.height": 16,
+    "map.tileHeight": 16,
+    "map.tileWidth": 16,
+    "map.width": 20,
     "openFiles": [
         "level1.json",
         "tileset1.tsx"
