@@ -305,58 +305,23 @@ function buildTileFlagsMap(mapJson: any): Map<number, number> {
 }
 
 function buildGameAb3(
-  mapJson: any,
+  mapJsons: any[],
   bitplanes: number,
   spriteTileId: number,
   imageWidth?: number,
   imageHeight?: number
 ): string {
+  const mapJson = mapJsons[0];
   const tileSize = mapJson.tilewidth;
   const mapCols = mapJson.width;
   const mapRows = mapJson.height;
   const cells = mapCols * mapRows;
-
-  // Build tile → flags lookup
-  const tileFlagsMap = buildTileFlagsMap(mapJson);
+  const numLevels = mapJsons.length;
 
   // FLOOR=1, WALL=2, LADDER=4
   const FLOOR = 1;
   const WALL = 2;
   const LADDER = 4;
-
-  const allTiles: number[] = new Array(cells).fill(0);
-  for (const layer of mapJson.layers) {
-    if (layer.type !== 'tilelayer' || !layer.data) continue;
-    for (let i = 0; i < cells; i++) {
-      const gid = layer.data[i] || 0;
-      if (gid === 0) continue; // don't overwrite with empty
-      let bestFirstgid = 0;
-      for (const ts of mapJson.tilesets) {
-        if (ts.firstgid <= gid && ts.firstgid > bestFirstgid) bestFirstgid = ts.firstgid;
-      }
-      const tile = gid - bestFirstgid;
-      if (tile > 0) allTiles[i] = tile;
-    }
-  }
-
-  // Build tile flags array (parallel to allTiles)
-  const tileFlags: number[] = new Array(cells).fill(0);
-  for (let i = 0; i < cells; i++) {
-    const tileId = allTiles[i];
-    if (tileId > 0) {
-      tileFlags[i] = tileFlagsMap.get(tileId) || 0;
-    }
-  }
-
-  const dataLines: string[] = [];
-  for (let i = 0; i < allTiles.length; i += 16) {
-    dataLines.push(`Data.w ${allTiles.slice(i, i + 16).join(',')}`);
-  }
-
-  const flagsLines: string[] = [];
-  for (let i = 0; i < tileFlags.length; i += 16) {
-    flagsLines.push(`Data.w ${tileFlags.slice(i, i + 16).join(',')}`);
-  }
 
   const ts0 = mapJson.tilesets?.[0];
   const sheetW = imageWidth ?? ts0?.imagewidth ?? 320;
@@ -365,13 +330,13 @@ function buildGameAb3(
   const bp = bitplanes;
   const iffFilename = `tiles_${bp}bp.iff`;
 
-  // Tile → sheet coordinates
+  // Tile -> sheet coordinates
   const tId = spriteTileId;
   const srcX = (tId % sheetCols) * tileSize;
   const srcY = Math.floor(tId / sheetCols) * tileSize;
 
   return `; ---------------------------------------------------------------
-; game.ab3 -- Game loop met sprite (tile ${spriteTileId}) + joystick
+; game.ab3 -- Multi-level game met sprite (tile ${spriteTileId}) + joystick
 ; Tiled map export via Tiled2Retro
 ; ---------------------------------------------------------------
 
@@ -396,43 +361,12 @@ Dim tilemap.w(${cells})
 Dim tileflags.w(${cells})
 
 ; ==============================================================
-; AMIGA mode: laad tilesheet, map data, bouw sprite
+; AMIGA mode: laad tilesheet + sprite
 ; ==============================================================
 
 ; --- Laad tilesheet IFF ---
 BitMap 0, ${sheetW}, ${sheetH}, #BITPLANES
 LoadBitMap 0, "${iffFilename}", 0
-
-; --- Lees map data ---
-Restore MapData
-For i = 0 To ${cells - 1}
-  Read tilemap(i)
-Next i
-
-; --- Lees tile flags ---
-Restore FlagData
-For i = 0 To ${cells - 1}
-  Read tileflags(i)
-Next i
-
-; --- Bouw map op BitMap 1 ---
-BitMap 1, ${mapCols * tileSize}, ${mapRows * tileSize}, #BITPLANES
-
-For y = 0 To #MAP_ROWS - 1
-  For x = 0 To #MAP_COLS - 1
-    idx    = y * #MAP_COLS + x
-    tile.w = tilemap(idx)
-    If tile = 0 Then Goto skipBuild
-    sx.w = (tile MOD #SHEET_COLS) * #TILE_SIZE
-    sy.w = tile / #SHEET_COLS
-    sy   = sy * #TILE_SIZE
-    Use BitMap 0
-    GetaShape 0, sx, sy, #TILE_SIZE, #TILE_SIZE
-    Use BitMap 1
-    Blit 0, x * #TILE_SIZE, y * #TILE_SIZE
-    .skipBuild:
-  Next x
-Next y
 
 ; --- Pak sprite-tile uit de sheet ---
 Use BitMap 0
@@ -440,15 +374,10 @@ GetaShape 1, #SPRITE_SRCX, #SPRITE_SRCY, #TILE_SIZE, #TILE_SIZE
 GetaSprite 0, 1
 Free Shape 1
 
-VWait 50
+currentLevel.w = 1
+done.w = 0
 
-; ==============================================================
-; BLITZ mode: display + game loop
-; ==============================================================
-
-BLITZ
-
-; --- NEWTYPE voor de speler ---
+; --- NEWTYPE voor de speler (eenmalig) ---
 NEWTYPE .player
   x.w
   y.w
@@ -464,387 +393,400 @@ NEWTYPE .player
   state.w
 End NEWTYPE
 
-; Display BitMap met map
-Slice 0, 44, #BITPLANES
-Use BitMap 0
-Use Palette 0
-Show 1
-
-; --- Player initialisatie ---
-player.player\\x  = 156
-player\\y         = 124
-player\\vy        = 0
-player\\onGround  = 0
-player\\speed     = 2
-player\\gravity   = 1
-player\\jumpForce = 5
-player\\maxVy     = #MAX_VY
-player\\jumpPressed = 0
-player\\jumpHold    = 0
-player\\ladderTimer = 0
-player\\state       = 0
-
-; States: 0=Walking 1=Climbing 2=Jumping 3=Falling
-
 ; ==============================================================
-; Game loop - state machine
+; LEVEL LOOP: bouw map in AMIGA mode, game in BLITZ mode
 ; ==============================================================
 
 Repeat
-  ; --- Joystick input lezen ---
-  jx = Joyx(1)
-  jy = Joyy(1)
-  jb = Joyb(1)
+  ; --- AMIGA: Laad data voor currentLevel ---
+${Array.from({length: numLevels}, (_, i) => `  If currentLevel = ${i + 1}
+    Restore MapData${i + 1} : For i = 0 To #CELLS - 1 : Read tilemap(i) : Next i
+    Restore FlagData${i + 1} : For i = 0 To #CELLS - 1 : Read tileflags(i) : Next i
+  EndIf`).join('\n')}
+
+  ; --- Vrijgeven en herbouwen BitMap 1 ---
+  Free BitMap 1
+  BitMap 1, ${mapCols * tileSize}, ${mapRows * tileSize}, #BITPLANES
+
+  ; --- Bouw map: blit elke cel, tile 0 voor lege cellen ---
+  For y = 0 To #MAP_ROWS - 1
+    For x = 0 To #MAP_COLS - 1
+      idx    = y * #MAP_COLS + x
+      tile.w = tilemap(idx)
+      If tile < 0 Then tile = 0
+      sx.w = (tile MOD #SHEET_COLS) * #TILE_SIZE
+      sy.w = tile / #SHEET_COLS
+      sy   = sy * #TILE_SIZE
+      Use BitMap 0
+      GetaShape 0, sx, sy, #TILE_SIZE, #TILE_SIZE
+      Use BitMap 1
+      Blit 0, x * #TILE_SIZE, y * #TILE_SIZE
+    Next x
+  Next y
+
+
+  VWait 10
 
   ; ==============================================================
-  ; Ladder detectie (gedeeld)
+  ; BLITZ mode: display + game loop per level
   ; ==============================================================
-  footY.w  = player\\y + #TILE_SIZE
-  midX.w   = player\\x + (#TILE_SIZE / 2)
-  midTileX.w = midX / #TILE_SIZE
-  footTileY.w = footY / #TILE_SIZE
 
-  onLadder = 0
+  BLITZ
 
-  ; Check midden-positie op voet-hoogte
-  idx = footTileY * #MAP_COLS + midTileX
-  If idx >= 0 AND idx < #CELLS
-    f.w = tileflags(idx)
-    If f & #FLAG_LADDER Then onLadder = 1
-  EndIf
+  ; Display BitMap met map
+  Slice 0, 44, #BITPLANES
+  Use BitMap 0
+  Use Palette 0
+  Show 1
 
-  ; Check midden-positie op body-hoogte
-  bodyTileY.w = player\\y / #TILE_SIZE
-  idx = bodyTileY * #MAP_COLS + midTileX
-  If idx >= 0 AND idx < #CELLS
-    f.w = tileflags(idx)
-    If f & #FLAG_LADDER Then onLadder = 1
-  EndIf
+  ; --- Player initialisatie (links in level) ---
+  player.player\\x  = 10
+  player\\y         = 124
+  player\\vy        = 0
+  player\\onGround  = 0
+  player\\speed     = 2
+  player\\gravity   = 1
+  player\\jumpForce = 5
+  player\\maxVy     = #MAX_VY
+  player\\jumpPressed = 0
+  player\\jumpHold    = 0
+  player\\ladderTimer = 0
+  player\\state       = 0
+
+  ; States: 0=Walking 1=Climbing 2=Jumping 3=Falling
 
   ; ==============================================================
-  ; STATE 0: WALKING
+  ; Game loop - state machine
   ; ==============================================================
-  If player\\state = 0
-    ; --- Ladder climbing start? ---
-    ; Omhoog: alleen als er een LADDER tile boven het hoofd zit
-    ; Omlaag: alleen als je NIET op een FLOOR tile staat
-    If onLadder = 1 AND jb = 0
-      canClimb = 0
-      If jy = -1
-        ; Check of de tile BOVEN het hoofd een LADDER is
-        headAboveY.w = (player\\y - 2) / #TILE_SIZE
-        If headAboveY >= 0
-          upIdx = headAboveY * #MAP_COLS + midTileX
-          If upIdx >= 0 AND upIdx < #CELLS
-            If tileflags(upIdx) & #FLAG_LADDER
-              canClimb = 1
+
+  Repeat
+    ; --- Joystick input lezen ---
+    jx = Joyx(1)
+    jy = Joyy(1)
+    jb = Joyb(1)
+
+    ; ==============================================================
+    ; Ladder detectie (gedeeld)
+    ; ==============================================================
+    footY.w  = player\\y + #TILE_SIZE
+    midX.w   = player\\x + (#TILE_SIZE / 2)
+    midTileX.w = midX / #TILE_SIZE
+    footTileY.w = footY / #TILE_SIZE
+
+    onLadder = 0
+
+    ; Check midden-positie op voet-hoogte
+    idx = footTileY * #MAP_COLS + midTileX
+    If idx >= 0 AND idx < #CELLS
+      f.w = tileflags(idx)
+      If f & #FLAG_LADDER Then onLadder = 1
+    EndIf
+
+    ; Check midden-positie op body-hoogte
+    bodyTileY.w = player\\y / #TILE_SIZE
+    idx = bodyTileY * #MAP_COLS + midTileX
+    If idx >= 0 AND idx < #CELLS
+      f.w = tileflags(idx)
+      If f & #FLAG_LADDER Then onLadder = 1
+    EndIf
+
+    ; ==============================================================
+    ; STATE 0: WALKING
+    ; ==============================================================
+    If player\\state = 0
+      ; --- Ladder climbing start? ---
+      If onLadder = 1 AND jb = 0
+        canClimb = 0
+        If jy = -1
+          headAboveY.w = (player\\y - 2) / #TILE_SIZE
+          If headAboveY >= 0
+            upIdx = headAboveY * #MAP_COLS + midTileX
+            If upIdx >= 0 AND upIdx < #CELLS
+              If tileflags(upIdx) & #FLAG_LADDER
+                canClimb = 1
+              EndIf
             EndIf
           EndIf
         EndIf
+        If jy = 1
+          footCX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
+          footCY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
+          fIdx = footCY * #MAP_COLS + footCX
+          If fIdx >= 0 AND fIdx < #CELLS
+            If tilemap(fIdx) < 0 OR (tileflags(fIdx) & #FLAG_FLOOR) = 0
+              canClimb = 1
+            EndIf
+          Else
+            canClimb = 1
+          EndIf
+        EndIf
+        If canClimb = 1
+          player\\state = 1
+          player\\x = midTileX * #TILE_SIZE
+          player\\jumpPressed = 0
+          Goto skipState
+        EndIf
       EndIf
-      If jy = 1
+
+      ; --- Jump start? (edge-triggered) ---
+      If jb = 1 AND player\\jumpPressed = 0
+        player\\vy           = -player\\jumpForce
+        player\\onGround     = 0
+        player\\jumpPressed   = 1
+        player\\jumpHold      = 0
+        player\\state        = 2
+      Else
+        ; Horizontale beweging met WALL collision
+        If jx = -1
+          newX.w = player\\x - player\\speed
+          tileX.w = newX / #TILE_SIZE
+          topY.w  = player\\y / #TILE_SIZE
+          botY.w  = (player\\y + #TILE_SIZE - 1) / #TILE_SIZE
+          tIdx1 = topY * #MAP_COLS + tileX
+          tIdx2 = botY * #MAP_COLS + tileX
+          canMove = 1
+          If tIdx1 >= 0 AND tIdx1 < #CELLS
+            f.w = tileflags(tIdx1)
+            If f & #FLAG_WALL Then canMove = 0
+          EndIf
+          If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
+            f.w = tileflags(tIdx2)
+            If f & #FLAG_WALL Then canMove = 0
+          EndIf
+          If canMove = 1 Then player\\x = newX
+        EndIf
+        If jx = 1
+          newX.w = player\\x + player\\speed
+          tileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
+          topY.w  = player\\y / #TILE_SIZE
+          botY.w  = (player\\y + #TILE_SIZE - 1) / #TILE_SIZE
+          tIdx1 = topY * #MAP_COLS + tileX
+          tIdx2 = botY * #MAP_COLS + tileX
+          canMove = 1
+          If tIdx1 >= 0 AND tIdx1 < #CELLS
+            f.w = tileflags(tIdx1)
+            If f & #FLAG_WALL Then canMove = 0
+          EndIf
+          If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
+            f.w = tileflags(tIdx2)
+            If f & #FLAG_WALL Then canMove = 0
+          EndIf
+          If canMove = 1 Then player\\x = newX
+        EndIf
+
+        ; Check of speler nog op vloer staat
+        footCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
+        footCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
+        fIdx = footCheckY * #MAP_COLS + footCheckX
+        If fIdx >= 0 AND fIdx < #CELLS
+          If tilemap(fIdx) >= 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
+          Else
+            player\\state = 3
+          EndIf
+        Else
+          player\\state = 3
+        EndIf
+      EndIf
+      Goto skipState
+    EndIf
+
+    ; ==============================================================
+    ; STATE 1: CLIMBING
+    ; ==============================================================
+    If player\\state = 1
+      If jb = 1 AND player\\jumpPressed = 0
+        player\\vy           = -player\\jumpForce
+        player\\onGround     = 0
+        player\\jumpPressed   = 1
+        player\\jumpHold      = 0
+        player\\state        = 2
+        Goto skipState
+      EndIf
+      If onLadder = 0
         footCX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
         footCY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
         fIdx = footCY * #MAP_COLS + footCX
         If fIdx >= 0 AND fIdx < #CELLS
-          If tilemap(fIdx) = 0 OR (tileflags(fIdx) & #FLAG_FLOOR) = 0
-            canClimb = 1
+          If tilemap(fIdx) >= 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
+            player\\y   = footCY * #TILE_SIZE - #TILE_SIZE
+            player\\vy  = 0
+            player\\state = 0
+            player\\onGround = 1
+            Goto skipState
           EndIf
-        Else
-          canClimb = 1
         EndIf
-      EndIf
-      If canClimb = 1
-        player\\state = 1
-        player\\x = midTileX * #TILE_SIZE
-        player\\jumpPressed = 0
+        fIdx = (footCY + 1) * #MAP_COLS + footCX
+        If fIdx >= 0 AND fIdx < #CELLS
+          If tilemap(fIdx) >= 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
+            player\\y   = (footCY + 1) * #TILE_SIZE - #TILE_SIZE
+            player\\vy  = 0
+            player\\state = 0
+            player\\onGround = 1
+            Goto skipState
+          EndIf
+        EndIf
+        player\\state = 3
         Goto skipState
       EndIf
+      If jy = -1
+        player\\y = player\\y - 2
+        If player\\y < 0 Then player\\y = 0
+      EndIf
+      If jy = 1
+        newY.w = player\\y + 2
+        footCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
+        footCheckY.w = (newY + #TILE_SIZE) / #TILE_SIZE
+        fDownIdx = footCheckY * #MAP_COLS + footCheckX
+        If fDownIdx >= 0 AND fDownIdx < #CELLS
+          If tilemap(fDownIdx) >= 0 AND (tileflags(fDownIdx) & #FLAG_FLOOR)
+            player\\y   = footCheckY * #TILE_SIZE - #TILE_SIZE
+            player\\vy  = 0
+            player\\state = 0
+            player\\onGround = 1
+            Goto skipState
+          EndIf
+        EndIf
+        player\\y = newY
+      EndIf
+      player\\vy = 0
+      Goto skipState
     EndIf
 
-    ; --- Jump start? (edge-triggered) ---
-    If jb = 1 AND player\\jumpPressed = 0
-      player\\vy           = -player\\jumpForce
-      player\\onGround     = 0
-      player\\jumpPressed   = 1
-      player\\jumpHold      = 0
-      player\\state        = 2
-    Else
-      ; Horizontale beweging met WALL collision
+    ; ==============================================================
+    ; STATE 2: JUMPING
+    ; ==============================================================
+    If player\\state = 2
+      If jb = 0 Then player\\jumpPressed = 0
+      If jb = 1 AND player\\vy < 0 AND player\\jumpHold < 5
+        player\\jumpHold = player\\jumpHold + 1
+      Else
+        player\\vy = player\\vy + player\\gravity
+        If player\\vy >= 0 Then player\\state = 3
+      EndIf
+      If player\\vy > player\\maxVy Then player\\vy = player\\maxVy
+      player\\y = player\\y + player\\vy
       If jx = -1
         newX.w = player\\x - player\\speed
         tileX.w = newX / #TILE_SIZE
-        topY.w  = player\\y / #TILE_SIZE
-        botY.w  = (player\\y + #TILE_SIZE - 1) / #TILE_SIZE
-        tIdx1 = topY * #MAP_COLS + tileX
-        tIdx2 = botY * #MAP_COLS + tileX
+        tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
+        tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
         canMove = 1
         If tIdx1 >= 0 AND tIdx1 < #CELLS
-          f.w = tileflags(tIdx1)
-          If f & #FLAG_WALL Then canMove = 0
+          If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
         EndIf
         If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
-          f.w = tileflags(tIdx2)
-          If f & #FLAG_WALL Then canMove = 0
+          If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
         EndIf
         If canMove = 1 Then player\\x = newX
       EndIf
-
       If jx = 1
         newX.w = player\\x + player\\speed
         tileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
-        topY.w  = player\\y / #TILE_SIZE
-        botY.w  = (player\\y + #TILE_SIZE - 1) / #TILE_SIZE
-        tIdx1 = topY * #MAP_COLS + tileX
-        tIdx2 = botY * #MAP_COLS + tileX
+        tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
+        tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
         canMove = 1
         If tIdx1 >= 0 AND tIdx1 < #CELLS
-          f.w = tileflags(tIdx1)
-          If f & #FLAG_WALL Then canMove = 0
+          If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
         EndIf
         If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
-          f.w = tileflags(tIdx2)
-          If f & #FLAG_WALL Then canMove = 0
+          If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
         EndIf
         If canMove = 1 Then player\\x = newX
       EndIf
-
-      ; Check of speler nog op vloer staat (FLOOR of LADDER)
-      footCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
-      footCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
-      fIdx = footCheckY * #MAP_COLS + footCheckX
-      If fIdx >= 0 AND fIdx < #CELLS
-        If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
-          ; op vloer of ladder - blijf walking
-        Else
-          ; zwevend -> start falling
-          player\\state = 3
-        EndIf
-      Else
-        player\\state = 3
-      EndIf
-    EndIf
-
-    Goto skipState
-  EndIf
-
-  ; ==============================================================
-  ; STATE 1: CLIMBING (alleen omhoog/omlaag op ladder)
-  ; ==============================================================
-  If player\\state = 1
-    ; --- Jump van ladder af (fire button) ---
-    If jb = 1 AND player\\jumpPressed = 0
-      player\\vy           = -player\\jumpForce
-      player\\onGround     = 0
-      player\\jumpPressed   = 1
-      player\\jumpHold      = 0
-      player\\state        = 2
-      Goto skipState
-    EndIf
-
-    ; --- Geen ladder meer? -> check op FLOOR/LADDER onder voeten ---
-    If onLadder = 0
-      footCX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
-      footCY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
-
-      ; Rij 0 (huidig)
-      fIdx = footCY * #MAP_COLS + footCX
-      If fIdx >= 0 AND fIdx < #CELLS
-        If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
-          player\\y   = footCY * #TILE_SIZE - #TILE_SIZE
-          player\\vy  = 0
-          player\\state = 0
-          player\\onGround = 1
-          Goto skipState
-        EndIf
-      EndIf
-
-      ; Rij +1
-      fIdx = (footCY + 1) * #MAP_COLS + footCX
-      If fIdx >= 0 AND fIdx < #CELLS
-        If tilemap(fIdx) > 0 AND ((tileflags(fIdx) & #FLAG_FLOOR) OR (tileflags(fIdx) & #FLAG_LADDER))
-          player\\y   = (footCY + 1) * #TILE_SIZE - #TILE_SIZE
-          player\\vy  = 0
-          player\\state = 0
-          player\\onGround = 1
-          Goto skipState
-        EndIf
-      EndIf
-
-      player\\state = 3
-      Goto skipState
-    EndIf
-
-    ; --- Klimmen omhoog: 2 px per frame ---
-    If jy = -1
-      player\\y = player\\y - 2
-      If player\\y < 0 Then player\\y = 0
-    EndIf
-    If jy = 1
-      ; Klim omlaag: 2 px, check of we op een FLOOR tile terechtkomen
-      newY.w = player\\y + 2
-      footCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
-      footCheckY.w = (newY + #TILE_SIZE) / #TILE_SIZE
-      fDownIdx = footCheckY * #MAP_COLS + footCheckX
-      If fDownIdx >= 0 AND fDownIdx < #CELLS
-        If tilemap(fDownIdx) > 0 AND (tileflags(fDownIdx) & #FLAG_FLOOR)
-          player\\y   = footCheckY * #TILE_SIZE - #TILE_SIZE
-          player\\vy  = 0
-          player\\state = 0
-          player\\onGround = 1
-          Goto skipState
-        EndIf
-      EndIf
-      player\\y = newY
-    EndIf
-
-    player\\vy = 0
-    Goto skipState
-  EndIf
-
-  ; ==============================================================
-  ; STATE 2: JUMPING (omhoog)
-  ; ==============================================================
-  If player\\state = 2
-    ; Edge-trigger reset
-    If jb = 0 Then player\\jumpPressed = 0
-
-    ; Variable jump height: hold fire om langer omhoog te gaan
-    If jb = 1 AND player\\vy < 0 AND player\\jumpHold < 5
-      player\\jumpHold = player\\jumpHold + 1
-      ; skip gravity dit frame
-    Else
-      player\\vy = player\\vy + player\\gravity
       If player\\vy >= 0
-        player\\state = 3 ; top bereikt -> vallen
+        fCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
+        fCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
+        fIdx = fCheckY * #MAP_COLS + fCheckX
+        If fIdx >= 0 AND fIdx < #CELLS
+          If tilemap(fIdx) >= 0 AND (tileflags(fIdx) & #FLAG_FLOOR)
+            player\\y   = fCheckY * #TILE_SIZE - #TILE_SIZE
+            player\\vy  = 0
+            player\\state = 0
+          EndIf
+        EndIf
       EndIf
+      Goto skipState
     EndIf
 
-    If player\\vy > player\\maxVy Then player\\vy = player\\maxVy
-    player\\y = player\\y + player\\vy
-
-    ; Horizontale beweging in de lucht
-    If jx = -1
-      newX.w = player\\x - player\\speed
-      tileX.w = newX / #TILE_SIZE
-      tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
-      tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
-      canMove = 1
-      If tIdx1 >= 0 AND tIdx1 < #CELLS
-        If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
+    ; ==============================================================
+    ; STATE 3: FALLING
+    ; ==============================================================
+    If player\\state = 3
+      player\\vy = player\\vy + player\\gravity
+      If player\\vy > player\\maxVy Then player\\vy = player\\maxVy
+      player\\y = player\\y + player\\vy
+      If jx = -1
+        newX.w = player\\x - player\\speed
+        tileX.w = newX / #TILE_SIZE
+        tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
+        tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
+        canMove = 1
+        If tIdx1 >= 0 AND tIdx1 < #CELLS
+          If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
+        EndIf
+        If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
+          If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
+        EndIf
+        If canMove = 1 Then player\\x = newX
       EndIf
-      If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
-        If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
+      If jx = 1
+        newX.w = player\\x + player\\speed
+        tileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
+        tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
+        tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
+        canMove = 1
+        If tIdx1 >= 0 AND tIdx1 < #CELLS
+          If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
+        EndIf
+        If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
+          If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
+        EndIf
+        If canMove = 1 Then player\\x = newX
       EndIf
-      If canMove = 1 Then player\\x = newX
-    EndIf
-    If jx = 1
-      newX.w = player\\x + player\\speed
-      tileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
-      tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
-      tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
-      canMove = 1
-      If tIdx1 >= 0 AND tIdx1 < #CELLS
-        If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
-        If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If canMove = 1 Then player\\x = newX
-    EndIf
-
-    ; Floor collision check (alleen bij dalen)
-    If player\\vy >= 0
       fCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
       fCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
       fIdx = fCheckY * #MAP_COLS + fCheckX
       If fIdx >= 0 AND fIdx < #CELLS
-        If tilemap(fIdx) > 0 AND (tileflags(fIdx) & #FLAG_FLOOR)
+        If tilemap(fIdx) >= 0 AND (tileflags(fIdx) & #FLAG_FLOOR)
           player\\y   = fCheckY * #TILE_SIZE - #TILE_SIZE
           player\\vy  = 0
-          player\\state = 0 ; land -> walking
+          player\\state = 0
+          player\\jumpPressed = 0
         EndIf
       EndIf
+      Goto skipState
     EndIf
 
-    Goto skipState
-  EndIf
+    .skipState:
 
-  ; ==============================================================
-  ; STATE 3: FALLING
-  ; ==============================================================
-  If player\\state = 3
-    ; Gravity
-    player\\vy = player\\vy + player\\gravity
-    If player\\vy > player\\maxVy Then player\\vy = player\\maxVy
-    player\\y = player\\y + player\\vy
-
-    ; Horizontale beweging in de lucht
-    If jx = -1
-      newX.w = player\\x - player\\speed
-      tileX.w = newX / #TILE_SIZE
-      tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
-      tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
-      canMove = 1
-      If tIdx1 >= 0 AND tIdx1 < #CELLS
-        If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
-        If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If canMove = 1 Then player\\x = newX
+    ; --- Scherm-grenzen ---
+    If player\\x < 0   Then player\\x = 0
+    If player\\x > 304 Then player\\x = 304
+    If player\\y > 248
+      player\\y       = 248
+      player\\vy      = 0
+      player\\state   = 0
     EndIf
-    If jx = 1
-      newX.w = player\\x + player\\speed
-      tileX.w = (newX + #TILE_SIZE - 1) / #TILE_SIZE
-      tIdx1 = (player\\y / #TILE_SIZE) * #MAP_COLS + tileX
-      tIdx2 = ((player\\y + #TILE_SIZE - 1) / #TILE_SIZE) * #MAP_COLS + tileX
-      canMove = 1
-      If tIdx1 >= 0 AND tIdx1 < #CELLS
-        If tileflags(tIdx1) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If tIdx2 >= 0 AND tIdx2 < #CELLS AND canMove = 1
-        If tileflags(tIdx2) & #FLAG_WALL Then canMove = 0
-      EndIf
-      If canMove = 1 Then player\\x = newX
-    EndIf
+    If player\\y < 0 Then player\\y = 0
 
-    ; Floor collision check (alleen FLOOR — LADDER stopt vallen niet)
-    fCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
-    fCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
-    fIdx = fCheckY * #MAP_COLS + fCheckX
-    If fIdx >= 0 AND fIdx < #CELLS
-      If tilemap(fIdx) > 0 AND (tileflags(fIdx) & #FLAG_FLOOR)
-        player\\y   = fCheckY * #TILE_SIZE - #TILE_SIZE
-        player\\vy  = 0
-        player\\state = 0 ; land -> walking
-        player\\jumpPressed = 0
-      EndIf
-    EndIf
+    ; --- Render sprite ---
+    ShowSprite 0, player\\x, player\\y, 0
 
-    Goto skipState
-  EndIf
+    VWait
 
-  .skipState:
+  Until Joyb(1) = 2 OR player\\x >= 304
 
-  ; --- Scherm-grenzen ---
-  If player\\x < 0   Then player\\x = 0
-  If player\\x > 304 Then player\\x = 304
-  If player\\y > 248
-    player\\y       = 248
-    player\\vy      = 0
-    player\\state   = 0
-  EndIf
-  If player\\y < 0 Then player\\y = 0
+  ; --- Verlaat BLITZ mode, ga terug naar AMIGA voor volgend level ---
+  AMIGA
 
-  ; --- Render sprite ---
-  ShowSprite 0, player\\x, player\\y, 0
+  ; --- Check of we moeten stoppen ---
+  If Joyb(1) = 2 Then done = 1
 
-  VWait
+  ; --- Volgend level ---
+  currentLevel = currentLevel + 1
 
-Until Joyb(1) = 2
+Until done = 1 OR currentLevel > ${numLevels}
 
-AMIGA
 End
 
 XINCLUDE "mapdata.ab3"
@@ -853,56 +795,56 @@ XINCLUDE "mapdata.ab3"
 
 // ─── Mapdata AB3 (alleen .MapData en .FlagData labels) ────────────────────────
 
-function buildMapdataAb3(mapJson: any): string {
-  const mapCols = mapJson.width;
-  const mapRows = mapJson.height;
-  const cells = mapCols * mapRows;
-  const tileFlagsMap = buildTileFlagsMap(mapJson);
+function buildMapdataAb3(mapJsons: any[]): string {
+  const sections: string[] = [];
+  sections.push(`; ---------------------------------------------------------------`);
+  sections.push(`; mapdata.ab3 -- Map data en tile flags voor alle levels`);
+  sections.push(`; Tiled map export via Tiled2Retro`);
+  sections.push(`; ---------------------------------------------------------------`);
 
-  const allTiles: number[] = new Array(cells).fill(0);
-  for (const layer of mapJson.layers) {
-    if (layer.type !== 'tilelayer' || !layer.data) continue;
-    for (let i = 0; i < cells; i++) {
-      const gid = layer.data[i] || 0;
-      if (gid === 0) continue;
-      let bestFirstgid = 0;
-      for (const ts of mapJson.tilesets) {
-        if (ts.firstgid <= gid && ts.firstgid > bestFirstgid) bestFirstgid = ts.firstgid;
+  for (let lvl = 0; lvl < mapJsons.length; lvl++) {
+    const mapJson = mapJsons[lvl];
+    const cells = mapJson.width * mapJson.height;
+    const tileFlagsMap = buildTileFlagsMap(mapJson);
+
+    const allTiles: number[] = new Array(cells).fill(-1);
+    for (const layer of mapJson.layers) {
+      if (layer.type !== 'tilelayer' || !layer.data) continue;
+      for (let i = 0; i < cells; i++) {
+        const gid = layer.data[i] || 0;
+        if (gid === 0) continue;
+        let bestFirstgid = 0;
+        for (const ts of mapJson.tilesets) {
+          if (ts.firstgid <= gid && ts.firstgid > bestFirstgid) bestFirstgid = ts.firstgid;
+        }
+        const tile = gid - bestFirstgid;
+        if (tile >= 0) allTiles[i] = tile;
       }
-      const tile = gid - bestFirstgid;
-      if (tile > 0) allTiles[i] = tile;
     }
-  }
 
-  const tileFlags: number[] = new Array(cells).fill(0);
-  for (let i = 0; i < cells; i++) {
-    const tileId = allTiles[i];
-    if (tileId > 0) {
-      tileFlags[i] = tileFlagsMap.get(tileId) || 0;
+    const tileFlags: number[] = new Array(cells).fill(0);
+    for (let i = 0; i < cells; i++) {
+      const tileId = allTiles[i];
+      if (tileId > 0) tileFlags[i] = tileFlagsMap.get(tileId) || 0;
     }
+
+    const n = lvl + 1;
+    const dataLines: string[] = [];
+    for (let i = 0; i < allTiles.length; i += 16) {
+      dataLines.push(`Data.w ${allTiles.slice(i, i + 16).join(',')}`);
+    }
+    const flagsLines: string[] = [];
+    for (let i = 0; i < tileFlags.length; i += 16) {
+      flagsLines.push(`Data.w ${tileFlags.slice(i, i + 16).join(',')}`);
+    }
+
+    sections.push(`\n.MapData${n}:`);
+    sections.push(dataLines.join('\n'));
+    sections.push(`\n.FlagData${n}:`);
+    sections.push(flagsLines.join('\n'));
   }
 
-  const dataLines: string[] = [];
-  for (let i = 0; i < allTiles.length; i += 16) {
-    dataLines.push(`Data.w ${allTiles.slice(i, i + 16).join(',')}`);
-  }
-
-  const flagsLines: string[] = [];
-  for (let i = 0; i < tileFlags.length; i += 16) {
-    flagsLines.push(`Data.w ${tileFlags.slice(i, i + 16).join(',')}`);
-  }
-
-  return `; ---------------------------------------------------------------
-; mapdata.ab3 -- Map data en tile flags
-; Tiled map export via Tiled2Retro
-; ---------------------------------------------------------------
-
-.MapData:
-${dataLines.join('\n')}
-
-.FlagData:
-${flagsLines.join('\n')}
-`;
+  return sections.join('\n') + '\n';
 }
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────
@@ -976,17 +918,54 @@ function initTiledViewerTab(): void {
   let tiledTilesheetImage: HTMLImageElement | null = null;
 
   async function doTiledExport(): Promise<void> {
-    const exportData = (window as any).tiledGetExportData?.();
-    if (!exportData) { showToast('No map loaded for export', 'error'); return; }
-    const { mapJson } = exportData;
-    if (!mapJson || !mapJson.layers) { showToast('Invalid map data', 'error'); return; }
+    // Lees alle JSON-bestanden in mapList als levels
+    const allMapJsons: any[] = [];
+    for (const m of mapList) {
+      const raw = await editorApi.readTextFile(m.jsonPath);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // Inject tile properties from external .tsx tilesets
+        if (parsed.tilesets) {
+          for (const ts of parsed.tilesets) {
+            if (ts.source && !ts.tiles) {
+              try {
+                const tsxRaw = await editorApi.readTextFile(currentFolder + '/' + ts.source);
+                if (tsxRaw) {
+                  const tileRegex = /<tile\s+id="(\d+)"[^>]*>([\s\S]*?)<\/tile>/g;
+                  const tiles: Record<string, any> = {};
+                  let match;
+                  while ((match = tileRegex.exec(tsxRaw)) !== null) {
+                    const tileId = match[1];
+                    const inner = match[2];
+                    const propsRegex = /<property\s+name="([^"]*)"\s+type="([^"]*)"[^>]*\s+value="([^"]*)"/g;
+                    const properties: any[] = [];
+                    let propMatch;
+                    while ((propMatch = propsRegex.exec(inner)) !== null) {
+                      properties.push({ name: propMatch[1], type: propMatch[2], value: parseInt(propMatch[3], 10) });
+                    }
+                    if (properties.length > 0) { tiles[tileId] = { properties }; }
+                  }
+                  if (Object.keys(tiles).length > 0) { ts.tiles = tiles; }
+                  const imgMatch = tsxRaw.match(/<image\s+source="([^"]+)"\s+width="(\d+)"\s+height="(\d+)"/);
+                  if (imgMatch) { ts.imagewidth = parseInt(imgMatch[2], 10); ts.imageheight = parseInt(imgMatch[3], 10); }
+                }
+              } catch {}
+            }
+          }
+        }
+        allMapJsons.push(parsed);
+      }
+    }
+    if (allMapJsons.length === 0) { showToast('No level data found', 'error'); return; }
+
+    const mapJson = allMapJsons[0];
 
     const ts0 = mapJson.tilesets?.[0];
     let imgW = ts0?.imagewidth || 320;
     let imgH = ts0?.imageheight || 256;
     let image: HTMLImageElement | null = null;
-    if (exportData.pngPath) {
-      const dataUrl = await editorApi.loadPngFile(exportData.pngPath);
+    if (pngPath) {
+      const dataUrl = await editorApi.loadPngFile(pngPath);
       if (dataUrl) {
         image = await new Promise<HTMLImageElement>((resolve) => {
           const img = new Image();
@@ -1003,13 +982,13 @@ function initTiledViewerTab(): void {
       iffData = buildIffFromImage(image, bp).iff;
     }
 
-    const mapdataAb3raw = buildMapdataAb3(mapJson);
+    const mapdataAb3raw = buildMapdataAb3(allMapJsons);
     const mapdataAb3Bytes = stringToAmigaBytes(mapdataAb3raw);
 
     // Sprite tile ID (tile 459 = tile_id in Tiled, 0-based index 459)
     // The sprite tile ID is passed as a constant to the generated game.ab3
     const gameAb3Bytes = stringToAmigaBytes(
-      buildGameAb3(mapJson, bp, 459, imgW, imgH)
+      buildGameAb3(allMapJsons, bp, 459, imgW, imgH)
     );
 
     if (!currentFolder) { showToast('No folder selected', 'error'); return; }

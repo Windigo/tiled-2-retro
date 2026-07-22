@@ -8,27 +8,27 @@
             "scaleInDock": 1
         },
         "level1.json": {
-            "scale": 2.28296875,
+            "scale": 1.89,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": 159.87954281021146,
-                "y": 125.27547738005612
+                "x": 156.34920634920638,
+                "y": 115.0793650793651
             }
         },
         "level2.json": {
             "scale": 1.484375,
-            "selectedLayer": 0,
+            "selectedLayer": 1,
             "viewCenter": {
-                "x": 160,
-                "y": 230.06315789473683
+                "x": 154.61052631578949,
+                "y": 162.69473684210527
             }
         },
         "level3.json": {
             "scale": 1.484375,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": 159.66315789473683,
-                "y": 128
+                "x": 160,
+                "y": 122.27368421052628
             }
         },
         "tileset1.tsx": {
