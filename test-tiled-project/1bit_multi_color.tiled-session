@@ -1,34 +1,58 @@
 {
-    "activeFile": "tileset1.tsx",
+    "activeFile": "level2.json",
     "expandedProjectPaths": [
         "."
     ],
     "fileStates": {
+        "colored_packed.tsx": {
+            "scaleInDock": 1
+        },
         "level1.json": {
             "scale": 2.28296875,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": 215.2898501129286,
-                "y": 128.12264732051193
+                "x": 159.87954281021146,
+                "y": 125.27547738005612
+            }
+        },
+        "level2.json": {
+            "scale": 1.484375,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 160,
+                "y": 230.06315789473683
+            }
+        },
+        "level3.json": {
+            "scale": 1.484375,
+            "selectedLayer": 1,
+            "viewCenter": {
+                "x": 159.66315789473683,
+                "y": 128
             }
         },
         "tileset1.tsx": {
-            "scaleInDock": 1,
+            "scaleInDock": 2,
             "scaleInEditor": 1
         }
     },
+    "last.externalTilesetPath": "/Volumes/M4-Lexar/Development/amiga/projects/tiled-to-retro/test-tiled-project",
     "map.height": 16,
     "map.tileHeight": 16,
     "map.tileWidth": 16,
     "map.width": 20,
     "openFiles": [
         "level1.json",
-        "tileset1.tsx"
+        "tileset1.tsx",
+        "level3.json",
+        "level2.json"
     ],
     "project": "1bit_multi_color.tiled-project",
     "property.type": "TileFlags",
     "recentFiles": [
         "level1.json",
-        "tileset1.tsx"
+        "tileset1.tsx",
+        "level3.json",
+        "level2.json"
     ]
 }
