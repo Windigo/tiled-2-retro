@@ -12,7 +12,7 @@ declare const editorApi: {
   exportAmiga: (data: { projectFolder: string; iffData: number[]; iffBitplanes: number; mapdataAb3Data: number[]; gameAb3Data: number[] }) => Promise<boolean>;
 };
 
-// ─── Toast ─────────────────────────────────────────────────────────────────
+// --- Toast -----------------------------------------------------------------
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -28,7 +28,7 @@ function showToast(message: string, type: 'success' | 'error' = 'success', durat
 
 function formatSize(bytes: number): string { return bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB'; }
 
-// ─── IFF building helpers ─────────────────────────────────────────────────────
+// --- IFF building helpers -----------------------------------------------------
 
 function putU16BE(buf: Uint8Array, offset: number, value: number): void {
   buf[offset] = (value >> 8) & 0xFF;
@@ -177,7 +177,7 @@ function stringToAmigaBytes(str: string): Uint8Array {
   return buf;
 }
 
-// ─── Tiled export helpers ────────────────────────────────────────────────────
+// --- Tiled export helpers ----------------------------------------------------
 
 interface TiledLayerMeta { name: string; visible: boolean; type: string; data: number[]; width: number; height: number; opacity: number; x: number; y: number; }
 
@@ -280,9 +280,9 @@ ${dataLines.join('\n')}
 `;
 }
 
-// ─── Game AB3 (sprite + joystick gameloop) ────────────────────────────────────
+// --- Game AB3 (sprite + joystick gameloop) ------------------------------------
 
-// Build a tile → flags lookup map from tileset custom properties
+// Build a tile -> flags lookup map from tileset custom properties
 // FLAGS property is an enum with: FLOOR=1, WALL=2, LADDER=4
 function buildTileFlagsMap(mapJson: any): Map<number, number> {
   const flagsMap = new Map<number, number>();
@@ -316,7 +316,7 @@ function buildGameAb3(
   const mapRows = mapJson.height;
   const cells = mapCols * mapRows;
 
-  // Build tile → flags lookup
+  // Build tile -> flags lookup
   const tileFlagsMap = buildTileFlagsMap(mapJson);
 
   // FLOOR=1, WALL=2, LADDER=4
@@ -365,7 +365,7 @@ function buildGameAb3(
   const bp = bitplanes;
   const iffFilename = `tiles_${bp}bp.iff`;
 
-  // Tile → sheet coordinates
+  // Tile -> sheet coordinates
   const tId = spriteTileId;
   const srcX = (tId % sheetCols) * tileSize;
   const srcY = Math.floor(tId / sheetCols) * tileSize;
@@ -809,7 +809,7 @@ Repeat
       If canMove = 1 Then player\\x = newX
     EndIf
 
-    ; Floor collision check (alleen FLOOR — LADDER stopt vallen niet)
+    ; Floor collision check (alleen FLOOR - LADDER stopt vallen niet)
     fCheckX.w = (player\\x + #TILE_SIZE/2) / #TILE_SIZE
     fCheckY.w = (player\\y + #TILE_SIZE) / #TILE_SIZE
     fIdx = fCheckY * #MAP_COLS + fCheckX
@@ -851,7 +851,7 @@ XINCLUDE "mapdata.ab3"
 `;
 }
 
-// ─── Mapdata AB3 (alleen .MapData en .FlagData labels) ────────────────────────
+// --- Mapdata AB3 (alleen .MapData en .FlagData labels) ------------------------
 
 function buildMapdataAb3(mapJson: any): string {
   const mapCols = mapJson.width;
@@ -905,7 +905,7 @@ ${flagsLines.join('\n')}
 `;
 }
 
-// ─── TAB SWITCHING ────────────────────────────────────────────────────────
+// --- TAB SWITCHING --------------------------------------------------------
 
 const tabTiledViewer = document.getElementById('tab-tiled-viewer') as HTMLButtonElement;
 const tabPngIff = document.getElementById('tab-png-iff') as HTMLButtonElement;
@@ -934,7 +934,7 @@ function switchTab(tabName: string): void {
 tabTiledViewer.addEventListener('click', () => switchTab('tiled-viewer'));
 tabPngIff.addEventListener('click', () => switchTab('png-iff'));
 
-// ─── CUSTOM MENU BAR ─────────────────────────────────────────────────────
+// --- CUSTOM MENU BAR -----------------------------------------------------
 
 document.querySelectorAll('#menu-bar .menu-item').forEach(el => {
   el.addEventListener('click', () => {
@@ -944,7 +944,7 @@ document.querySelectorAll('#menu-bar .menu-item').forEach(el => {
   });
 });
 
-// ─── TILED VIEWER TAB ─────────────────────────────────────────────────────
+// --- TILED VIEWER TAB -----------------------------------------------------
 
 let tiledViewerInitialized = false;
 
@@ -1157,7 +1157,7 @@ function initTiledViewerTab(): void {
     }
   }
 
-  // ─── Tilesheet IFF link ──────────────────────────────────────────────
+  // --- Tilesheet IFF link ----------------------------------------------
 
   function getTilesheetImage(): HTMLImageElement | null {
     const exportData = (window as any).tiledGetExportData?.();
@@ -1318,7 +1318,7 @@ function initTiledViewerTab(): void {
   }
 }
 
-// ─── PNG → IFF CONVERTER ───────────────────────────────────────────────────
+// --- PNG -> IFF CONVERTER ---------------------------------------------------
 
 let convPngDataUrl: string | null = null;
 let convPngFileName: string = '';
@@ -1435,6 +1435,6 @@ btnConvertIff.addEventListener('click', async () => {
   else showToast('Failed to save IFF', 'error');
 });
 
-// ─── BOOT ─────────────────────────────────────────────────────────────────
+// --- BOOT -----------------------------------------------------------------
 
 switchTab('tiled-viewer');

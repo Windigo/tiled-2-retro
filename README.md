@@ -43,7 +43,21 @@ npm start          # launch the Electron app
 | `maps.ab3` | Draw-only: loads IFF and renders the merged map |
 | `game.ab3` | Full game loop: loads IFF, draws map, extracts sprite (tile 459), joystick movement |
 
-The exported .ab3 files are plain ASCII with LF line endings, compatible with AmiBlitz3's ASCII import.
+The exported `.ab3` files are **plain ASCII** with LF line endings (Unix-style).
+
+### Loading in AmiBlitz
+
+| AmiBlitz Version | ASCII `.ab3` | Tokenized `.ab3` |
+|---|---|---|
+| **3.10** | ✅ Works via "Open" | ✅ Works |
+| **3.13b** | ❌ "Library not Available" error | ✅ Works |
+
+For AmiBlitz 3.13b:
+1. Open the generated `.ab3` file in **AmiBlitz 3.10**
+2. **Compile & Save** — this converts it to the tokenized binary `.ab3` format
+3. Open the saved tokenized file in **AmiBlitz 3.13b**
+
+Alternatively, run the project directly in AmiBlitz 3.10 from the start.
 
 ### PNG → IFF Converter Tab
 
